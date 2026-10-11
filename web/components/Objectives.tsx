@@ -1,5 +1,6 @@
 'use client';
 
+import { Bar } from './ui';
 import { App, useApp, useT } from '@/lib/app';
 import { Avatar, PartIcon, partName, slotName } from '@/lib/avatar';
 import { GROUPS, howOf, titleOf } from '@/lib/objectives';
@@ -74,7 +75,7 @@ export default function Objectives() {
                       <strong>{t('Accompli', 'Reached')}</strong>
                     ) : (
                       <>
-                        <span className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={o.goal} aria-valuenow={o.have} aria-label={titleOf(o, t)}><i style={{ width: `${(100 * o.have) / o.goal}%` }} /></span>
+                        <Bar value={o.have} max={o.goal} label={titleOf(o, t)} />
                         <strong>{o.have}/{o.goal}</strong>
                       </>
                     )}

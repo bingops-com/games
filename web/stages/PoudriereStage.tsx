@@ -1,5 +1,6 @@
 'use client';
 
+import { play } from '@/lib/sound';
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
@@ -301,6 +302,15 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
   const [fx, setFx] = useState<Fx[]>([]);
   const fxId = useRef(0);
   const prev = useRef<View | null>(null);
+  // Une bombe posée et une explosion s'entendent, chacune une fois.
+  const lastBomb = v.bombs.reduce((n, b) => Math.max(n, b.id), 0);
+  const lastBlast = v.blasts.reduce((n, b) => Math.max(n, b.id), 0);
+  useEffect(() => {
+    if (lastBomb > 0) play('bomb');
+  }, [lastBomb]);
+  useEffect(() => {
+    if (lastBlast > 0) play('boom');
+  }, [lastBlast]);
   const upsKey = v.ups.map((u) => `${u.c}${u.k}`).join(',');
   const aliveKey = v.players.map((p) => (p.alive ? 1 : 0)).join('');
   useEffect(() => {
@@ -321,6 +331,7 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       if (p.alive && !v.players[seat]?.alive) add.push({ id: ++fxId.current, kind: 'dead', x: p.x, y: p.y, seat });
     });
     if (add.length === 0) return;
+    for (const kind of new Set(add.map((f) => f.kind))) play(kind === 'pop' ? 'crate' : kind === 'word' ? 'pick' : 'out');
     setFx((old) => [...old, ...add]);
     const ids = new Set(add.map((f) => f.id));
     setTimeout(() => setFx((old) => old.filter((f) => !ids.has(f.id))), 1100);

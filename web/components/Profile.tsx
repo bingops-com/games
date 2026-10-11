@@ -1,5 +1,6 @@
 'use client';
 
+import { Bar } from './ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -121,6 +122,9 @@ export default function Profile() {
   const by = new Map(p.stats.map((s) => [s.game, s]));
   const played = p.stats.reduce((n, s) => n + s.played, 0);
   const won = p.stats.reduce((n, s) => n + s.won, 0);
+  // Le jeu auquel il a le plus joué.
+  const most = [...p.stats].sort((a, b) => b.played - a.played)[0];
+  const best = most && most.played > 0 ? GAMES.find((g) => g.id === most.game) : undefined;
   const games = (n: number) => t(`${n} partie${n > 1 ? 's' : ''}`, `${n} game${n === 1 ? '' : 's'}`);
   const wins = (n: number) => t(`${n} victoire${n > 1 ? 's' : ''}`, `${n} win${n === 1 ? '' : 's'}`);
   const friends = p.friends ? t(`${p.friends} ami${p.friends > 1 ? 's' : ''}`, `${p.friends} friend${p.friends === 1 ? '' : 's'}`) : t('pas encore d’ami', 'no friends yet');
@@ -128,7 +132,13 @@ export default function Profile() {
     <div className="profile">
       <section className="paper">
         <h1><Name name={p.name} fx={p.fx} /></h1>
-        <p className="pitch">{t(`Joueur depuis ${dateOf(p.since, lang)}, ${friends}. ${p.done} objectif${p.done > 1 ? 's' : ''} sur ${p.objectives}.`, `Playing since ${dateOf(p.since, lang)}, ${friends}. ${p.done} of ${p.objectives} objectives.`)}</p>
+        <p className="pitch">{t(`Joueur depuis ${dateOf(p.since, lang)}, ${friends}.`, `Playing since ${dateOf(p.since, lang)}, ${friends}.`)}</p>
+        <dl className="facts">
+          <div><dt>{t('Jeu préféré', 'Favourite game')}</dt><dd>{best ? best.name : t('Pas encore', 'Not yet')}</dd></div>
+          <div><dt>{t('Victoires', 'Wins')}</dt><dd>{played > 0 ? `${Math.round((100 * won) / played)} %` : '0 %'}</dd></div>
+          <div><dt>{t('Objectifs', 'Objectives')}</dt><dd>{p.done}/{p.objectives}</dd></div>
+        </dl>
+        <Bar value={p.done} max={p.objectives} label={t('Objectifs accomplis', 'Objectives reached')} />
         <Actions p={p} reload={() => setVersion((v) => v + 1)} />
       </section>
       <section className="sea sheet" aria-label={t(`Statistiques de ${p.name}`, `${p.name}'s statistics`)}>

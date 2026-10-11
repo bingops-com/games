@@ -1,5 +1,6 @@
 'use client';
 
+import { Bar } from './ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { GAMES, pitchOf, playersOf } from '@/games/catalog';
@@ -42,7 +43,7 @@ function Nudge() {
           </>
         )}
       </span>
-      {account && !keep && <span className="bar" aria-hidden="true"><i style={{ width: `${(100 * next.have) / next.goal}%` }} /></span>}
+      {account && !keep && <Bar value={next.have} max={next.goal} />}
     </Link>
   );
 }

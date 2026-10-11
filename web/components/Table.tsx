@@ -1,8 +1,9 @@
 'use client';
 
+import { play } from '@/lib/sound';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { GAMES, byId, lengthOf, pitchOf, playersOf, rulesOf, type Game } from '@/games/catalog';
 import { App, cleanCode, profilePath, useApp, useT } from '@/lib/app';
@@ -320,6 +321,18 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
     const id = setTimeout(() => void App.refresh(), 1200);
     return () => clearTimeout(id);
   }, [over]);
+  // La fin de la partie et l'arrivée d'un joueur s'entendent.
+  const won = over && (game.noWinner || st.members.some((m) => m.id === st.you && m.seat >= 0 && st.winners?.includes(m.seat)));
+  useEffect(() => {
+    if (over) play(won ? 'win' : 'lose');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [over]);
+  const crowd = st.members.length;
+  const before = useRef(crowd);
+  useEffect(() => {
+    if (crowd > before.current) play('join');
+    before.current = crowd;
+  }, [crowd]);
   // Échap quitte la pleine fenêtre.
   useEffect(() => {
     if (!full) return;

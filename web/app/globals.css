@@ -372,6 +372,22 @@
   color: var(--navy);
   font: 900 1rem/1 var(--display);
 }
+.who-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.lang.sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  text-decoration: none;
+}
+.lang.sound .ic {
+  width: 1.1rem;
+  height: 1.1rem;
+}
 .lang {
   align-self: flex-start;
   padding: 0.2rem 0;
@@ -742,6 +758,17 @@ img.art {
   grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
   align-items: start;
   gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+/* Sur un grand écran, la colonne de papier suit la page pendant que le panneau défile. */
+@media (min-width: 56.0625rem) {
+  .profile > .paper {
+    position: sticky;
+    top: clamp(1rem, 2.5vw, 2.25rem);
+  }
+}
+.profile .facts + .bar {
+  margin: 0.9rem 0 1.5rem;
+  color: var(--link);
 }
 .back {
   display: inline-block;
@@ -1925,6 +1952,10 @@ img.art {
   }
   .who .lang {
     align-self: center;
+  }
+  .lang.sound {
+    font-size: 0;
+    gap: 0;
   }
   .home {
     grid-template-columns: minmax(0, 1fr);

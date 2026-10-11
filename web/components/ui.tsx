@@ -20,6 +20,8 @@ const ICONS = {
   check: <path d="M5 12.500l4.500 4.500L19 7.500" />,
   // Une pièce : un crédit du magasin.
   coin: <><circle cx="12" cy="12" r="8.500" /><path d="M12 7.500l1.300 3.200 3.200 1.300-3.200 1.300L12 16.500l-1.300-3.200L7.500 12l3.200-1.300z" /></>,
+  sound: <><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" /><path d="M15.500 9a4 4 0 0 1 0 6M18 6.500a7.500 7.500 0 0 1 0 11" /></>,
+  mute: <><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" /><path d="M16 9.500l5 5M21 9.500l-5 5" /></>,
   lock: <><rect x="5" y="10.500" width="14" height="9.500" rx="2.500" /><path d="M8.500 10.500V8a3.500 3.500 0 0 1 7 0v2.500" /></>,
 };
 
@@ -80,7 +82,9 @@ export function Field({ label, help, children }: { label: ReactNode; help?: Reac
 // Une jauge : où l'on en est, de 0 à max. Sans nom, elle est décorative.
 export function Bar({ value, max, label }: { value: number; max: number; label?: string }) {
   const width = `${Math.max(0, Math.min(100, (100 * value) / max))}%`;
+  // À zéro, la jauge est vide : pas de point qui ferait croire à un début.
+  const fill = value > 0 && <i style={{ width }} />;
   return label
-    ? <span className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={label}><i style={{ width }} /></span>
-    : <span className="bar" aria-hidden="true"><i style={{ width }} /></span>;
+    ? <span className="bar" role="progressbar" aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-label={label}>{fill}</span>
+    : <span className="bar" aria-hidden="true">{fill}</span>;
 }

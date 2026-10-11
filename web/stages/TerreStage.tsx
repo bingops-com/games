@@ -1,5 +1,6 @@
 'use client';
 
+import { play as sound } from '@/lib/sound';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
@@ -194,6 +195,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
       flights.push({ seat: e.target, n: e.n });
       badges.push({ seat: e.target, text: `+${e.n}` });
     }
+    sound(e.t === 'play' ? (e.n > 0 || e.target >= 0 ? 'hit' : 'card') : e.t === 'terre' ? 'call' : e.t === 'counter' ? 'hit' : 'draw');
     setFx((old) => ({ id: old.id + 1, flights, badges, call }));
     const done = setTimeout(() => setFx((old) => ({ ...old, flights: [], badges: [], call: '' })), 1700);
     return () => clearTimeout(done);

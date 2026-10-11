@@ -1,5 +1,6 @@
 'use client';
 
+import { play } from '@/lib/sound';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useApp, useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
@@ -47,6 +48,7 @@ export default function Chat({ lines, members, you, send }: { lines: ChatLine[];
   // joueur relit plus haut, on ne le déplace pas : une pastille dit ce qui est arrivé.
   useEffect(() => {
     if (!last) return;
+    if (last.from !== you && Date.now() - last.at < 5000) play('msg');
     if (atEnd.current || last.from === you) toEnd();
     else setUnseen((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps

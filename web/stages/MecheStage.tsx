@@ -1,5 +1,6 @@
 'use client';
 
+import { play } from '@/lib/sound';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
@@ -98,6 +99,7 @@ export default function MecheStage({ st, act }: StageProps<View>) {
     const first = seen.current === '';
     seen.current = sig;
     if (first || !v.last || (v.last.result !== 'ok' && v.last.result !== 'boom')) return;
+    play(v.last.result === 'boom' ? 'boom' : 'card');
     setFx((old) => ({ id: (old?.id ?? 0) + 1, seat: v.last!.seat, word: v.last!.word, boom: v.last!.result === 'boom' }));
     const done = setTimeout(() => setFx(null), 1500);
     return () => clearTimeout(done);

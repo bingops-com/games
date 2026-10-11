@@ -361,6 +361,18 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   des bonus qui sortent des caisses et dont le nom s'envole quand on les
   ramasse. Huit bonus, comme dans Bomberman : bombe, feu, patins, coup de
   pied, bombes perçantes, gilet, plein feu, et la tête de mort qui ralentit.
+- **Sons** : de petites notes fabriquées par le navigateur (`web/lib/sound.ts`,
+  aucun fichier chargé) disent ce qui vient de se passer : c'est à vous, un
+  message, un joueur qui arrive, une carte posée ou piochée, une bombe, une
+  explosion, un bonus, la fin de la partie. « Son », au pied de la bande, les
+  coupe ; le choix est gardé sur l'appareil.
+- **Salle d'attente** : à droite du jeu choisi, l'équipage en vignettes (quatre
+  par rangée, jusqu'à douze ; toucher une vignette ouvre ce qu'on peut faire du
+  joueur), le lien d'invitation, les réglages de l'hôte sur une ligne (salon
+  public, places), puis la discussion.
+- **Profil** : sur le papier, le jeu préféré, la part de victoires et les
+  objectifs accomplis ; la colonne de papier suit la page pendant que le
+  panneau défile, comme sur Objectifs et Magasin.
 - **Discussion** : les messages d'un même joueur se regroupent sous son avatar
   et son nom, avec l'heure ; les vôtres sont en blanc, à droite. Le champ et
   son bouton ne font qu'un. Si l'on relit plus haut, les nouveaux messages ne

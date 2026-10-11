@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type FormEvent, type CSSProperties } from 'react';
+import { play } from '@/lib/sound';
+import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import type { T } from '@/lib/i18n';
@@ -99,6 +100,11 @@ export default function PavillonsStage(props: StageProps<View>) {
   const me = st.seat;
   const [word, setWord] = useState('');
   const [count, setCount] = useState(1);
+  // Un mot retourné s'entend.
+  const turned = v.last ? `${v.last.i}` : '';
+  useEffect(() => {
+    if (turned) play('flip');
+  }, [turned]);
   if (v.phase === 'teams') return <Teams {...props} />;
 
   const myTeam = me >= 0 ? v.team[me] : -1;

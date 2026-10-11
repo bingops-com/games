@@ -336,7 +336,7 @@ function Nav() {
 
 // Qui joue, au pied de la bande : le compte ou l'invité, et la langue.
 function Who() {
-  const { ready, account, lang, avatar } = useApp();
+  const { ready, account, lang, avatar, sound } = useApp();
   const t = useT();
   const other = lang === 'fr' ? 'en' : 'fr';
   return (
@@ -358,10 +358,15 @@ function Who() {
           <button className="btn onsea small" onClick={() => App.openModal('login')}>{t('Se connecter', 'Sign in')}</button>
         </div>
       ))}
-      {/* Le bouton porte le nom de l'autre langue, écrit dans cette langue. */}
-      <button className="lang" lang={other} onClick={() => App.setLang(other)} aria-label={other === 'en' ? 'Read this site in English' : 'Lire ce site en français'}>
-        {other === 'en' ? 'English' : 'Français'}
-      </button>
+      <div className="who-foot">
+        {/* Le bouton porte le nom de l'autre langue, écrit dans cette langue. */}
+        <button className="lang" lang={other} onClick={() => App.setLang(other)} aria-label={other === 'en' ? 'Read this site in English' : 'Lire ce site en français'}>
+          {other === 'en' ? 'English' : 'Français'}
+        </button>
+        <button className="lang sound" aria-pressed={sound} onClick={() => App.setSound(!sound)}>
+          <Ic name={sound ? 'sound' : 'mute'} />{sound ? t('Son', 'Sound') : t('Son coupé', 'Sound off')}
+        </button>
+      </div>
     </div>
   );
 }

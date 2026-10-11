@@ -1,5 +1,6 @@
 'use client';
 
+import { play } from '@/lib/sound';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
@@ -49,6 +50,11 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
     log.current?.scrollTo(0, log.current.scrollHeight);
   }, [v.log.length]);
   useEffect(() => setText(''), [v.turn]);
+  // Quelqu'un a trouvé : ça s'entend.
+  const founds = v.log.filter((l) => l.kind === 'found').length;
+  useEffect(() => {
+    if (founds > 0) play('pick');
+  }, [founds]);
 
   const guess = (e: FormEvent) => {
     e.preventDefault();

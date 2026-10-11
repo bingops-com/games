@@ -1,5 +1,6 @@
 'use client';
 
+import { play, readSound, setSound } from './sound';
 import { useCallback, useSyncExternalStore } from 'react';
 import { encode, parse, randomLook, wearable } from './avatar';
 import { LANG_KEY, initialLang, serverMessage, type Lang, type T } from './i18n';
@@ -104,6 +105,8 @@ interface State {
   muted: string[];
   table: Table | null;
   modal: Modal;
+  // Les sons du jeu, que le joueur peut couper.
+  sound: boolean;
   // Pleine fenêtre : la partie occupe toute la fenêtre, sans la bande de gauche.
   full: boolean;
   toasts: Toast[];
@@ -116,7 +119,7 @@ const GUEST_KEY = 'games.guest';
 export const CODE_LENGTH = 4;
 export const NAME_MAX = 16;
 
-const initial: State = { ready: false, lang: 'fr', account: null, name: '', guest: '', avatar: '', guestAvatar: '', objectives: [], pals: [], invites: [], friends: null, asks: [], muted: [], table: null, modal: null, full: false, toasts: [] };
+const initial: State = { ready: false, lang: 'fr', account: null, name: '', guest: '', avatar: '', guestAvatar: '', objectives: [], pals: [], invites: [], friends: null, asks: [], muted: [], table: null, modal: null, sound: true, full: false, toasts: [] };
 let state = initial;
 const listeners = new Set<() => void>();
 let toastId = 0;
@@ -235,7 +238,7 @@ export const App = {
     if (state.ready) return;
     const lang = initialLang();
     document.documentElement.lang = lang;
-    set({ lang });
+    set({ lang, sound: readSound() });
     let guest = read<string>(NAME_KEY);
     if (!guest) {
       guest = randomName();
@@ -418,6 +421,11 @@ export const App = {
     const table = await App.api<Table>('/api/tables', { game: game ?? '', public: open });
     App.remember(table);
     return table;
+  },
+  setSound(sound: boolean) {
+    setSound(sound);
+    set({ sound });
+    if (sound) play('turn');
   },
   remember(table: Table | null) {
     if (state.table?.code === table?.code && !state.table?.left === !table?.left) return;
