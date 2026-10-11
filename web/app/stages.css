@@ -2657,6 +2657,10 @@ button.crew-chip:hover,
     translate: 0 1px;
   }
 }
+/* Votre pion est déplacé image par image par la page : il n'a pas à lisser ses sauts. */
+.pd-player.me {
+  transition: none;
+}
 /* Menthe : « celui-ci », votre pièce. Un anneau sous ses pieds, et son nom sur menthe. */
 .pd-player.me .bm-shadow {
   fill: none;

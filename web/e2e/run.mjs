@@ -171,18 +171,35 @@ const scenarios = {
     check(played === 0 || (await players[0].locator('.top-card').count()) >= 2, 'le tas ne garde pas les cartes posées');
   },
 
-  // Bombermat : on avance librement, on s'arrête entre deux cases, une bombe explose.
+  // Bombermat : le pion part dès la touche enfoncée, s'arrête entre deux cases, et finit là
+  // où le serveur le voit (ce que montre l'écran de l'autre joueur). Puis une bombe explose.
   async bombermat() {
-    const { players: [host] } = await room('Bombermat', 2);
+    const { players: [host, guest] } = await room('Bombermat', 2);
     await start(host);
     await host.locator('.pd-count').waitFor({ state: 'detached', timeout: 8000 });
-    const x = async () => Number(/translate\(([-\d.]+)%/.exec(await host.locator('.pd-player.me').evaluate((e) => e.style.transform))[1]) / 100;
+    const at = async (page, sel) => {
+      const m = /translate\(([-\d.]+)%, ([-\d.]+)%/.exec(await page.locator(sel).evaluate((e) => e.style.transform));
+      return { x: Number(m[1]) / 100, y: Number(m[2]) / 100 };
+    };
     await host.keyboard.down('ArrowRight');
-    await sleep(60);
+    await host.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
+    check((await at(host, '.pd-player.me')).x > 0, 'le pion attend le serveur pour partir');
+    await sleep(40);
     await host.keyboard.up('ArrowRight');
-    await sleep(500);
-    const stopped = await x();
-    check(stopped > 0 && stopped < 1, `un appui bref mène à ${stopped}, pas entre deux cases`);
+    await sleep(600);
+    const mine = await at(host, '.pd-player.me');
+    check(mine.x > 0 && mine.x < 1, `un appui bref mène à ${mine.x}, pas entre deux cases`);
+    const seen = await at(guest, '.pd-player.seat-0');
+    check(Math.abs(seen.x - mine.x) < 0.06 && Math.abs(seen.y - mine.y) < 0.06, `le pion est en ${mine.x} chez lui et en ${seen.x} chez l’autre`);
+    // Un aller-retour tenu : à l'arrêt, les deux écrans sont encore d'accord.
+    for (const key of ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight']) {
+      await host.keyboard.down(key);
+      await sleep(350);
+      await host.keyboard.up(key);
+    }
+    await sleep(600);
+    const a = await at(host, '.pd-player.me'), b = await at(guest, '.pd-player.seat-0');
+    check(Math.abs(a.x - b.x) < 0.06 && Math.abs(a.y - b.y) < 0.06, `après un aller-retour : ${a.x},${a.y} chez lui, ${b.x},${b.y} chez l’autre`);
     await host.keyboard.press('Space');
     await host.locator('.pd-bomb').waitFor();
     await host.locator('.pd-fire').first().waitFor({ timeout: 5000 });

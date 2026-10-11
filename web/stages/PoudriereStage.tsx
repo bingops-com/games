@@ -145,6 +145,40 @@ const Bomb = memo(function Bomb({ pierce }: { pierce?: boolean }) {
   );
 });
 
+// Le déplacement, tel que le serveur le joue (internal/games/poudriere.go) : on avance dans
+// le couloir jusqu'à la prochaine case fermée ; entre deux cases, tourner fait d'abord glisser
+// vers la case d'où la voie est libre. La page le rejoue pour son propre joueur, sans
+// attendre la réponse du serveur : le pion part dès que la touche s'enfonce.
+type Dir = 'u' | 'd' | 'l' | 'r';
+interface Pos { x: number; y: number }
+const EPS = 1e-9;
+function toward(v: number, target: number, budget: number): [number, number] {
+  const d = target - v;
+  return Math.abs(d) <= budget ? [target, budget - Math.abs(d)] : [v + Math.sign(d) * budget, 0];
+}
+function walk(pos: Pos, dir: Dir, budget: number, open: (x: number, y: number) => boolean): Pos {
+  const vertical = dir === 'u' || dir === 'd';
+  const sign = dir === 'r' || dir === 'd' ? 1 : -1;
+  let along = vertical ? pos.y : pos.x;
+  let across = vertical ? pos.x : pos.y;
+  const free = (a: number, c: number) => (vertical ? open(c, a) : open(a, c));
+  for (let turns = 0; budget > EPS && turns < 8; turns++) {
+    const lane = Math.round(across);
+    if (Math.abs(across - lane) > EPS) {
+      const ahead = Math.round(along) + sign;
+      const other = lane + Math.sign(across - lane);
+      if (free(ahead, lane)) [across, budget] = toward(across, lane, budget);
+      else if (free(ahead, other)) [across, budget] = toward(across, other, budget);
+      else break;
+      continue;
+    }
+    const next = sign > 0 ? Math.floor(along + EPS) + 1 : Math.ceil(along - EPS) - 1;
+    if (!free(next, lane)) break;
+    [along, budget] = toward(along, next, budget);
+  }
+  return vertical ? { x: across, y: along } : { x: along, y: across };
+}
+
 interface Fx {
   id: number;
   kind: 'pop' | 'word' | 'dead';
@@ -162,12 +196,41 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
   const playing = st.phase === 'playing' && me >= 0 && v.players[me]?.alive;
   const now = useNow(200) + skew;
   const held = useRef<string[]>([]);
+  // Où la page pense que son joueur se trouve, en avance sur le serveur, et le pion à déplacer.
+  const pred = useRef<Pos | null>(null);
+  const pawn = useRef<HTMLSpanElement>(null);
+  const stuck = useRef(0);
+  const live = useRef(v);
+  live.current = v;
 
   // Le clavier : la dernière direction enfoncée l'emporte, et la relâcher rend la main à
   // la précédente si elle est encore tenue.
   useEffect(() => {
     if (!playing) return;
     const sendDir = () => act({ t: 'dir', d: held.current[held.current.length - 1] ?? '' });
+    // Chaque image, le pion avance dans la direction tenue, à l'allure que le serveur lui
+    // connaît, sur la grille telle que la page la voit.
+    let raf = 0;
+    let last = performance.now();
+    const frame = (at: number) => {
+      const dt = Math.min(64, at - last);
+      last = at;
+      const now = live.current;
+      const self = now.players[me];
+      const dir = held.current[held.current.length - 1] as Dir | undefined;
+      const p = pred.current;
+      if (p && dir && self?.alive && Date.now() + skew >= now.startAt) {
+        const pace = self.cursed ? 330 : Math.max(110, 200 - (self.speed - 1) * 22);
+        pred.current = walk(p, dir, dt / pace, (x, y) => {
+          if (x < 0 || x >= now.w || y < 0 || y >= now.h || now.grid[y * now.w + x] !== '.') return false;
+          // Une bombe arrête, sauf celle sur laquelle on se tient encore.
+          return !now.bombs.some((b) => b.c === y * now.w + x) || (Math.abs(p.x - x) < 1 - EPS && Math.abs(p.y - y) < 1 - EPS);
+        });
+      }
+      if (pawn.current && pred.current) pawn.current.style.transform = `translate(${pred.current.x * 100}%, ${pred.current.y * 100}%)`;
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
     const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
     const down = (e: KeyboardEvent) => {
       if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -200,9 +263,33 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
+      cancelAnimationFrame(raf);
       held.current = [];
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, act]);
+
+  // À chaque nouvelle du serveur, la page se recale : à l'arrêt elle le rejoint en douceur ;
+  // en marche elle garde son avance, sauf si elle s'est trompée (un obstacle qu'elle ne
+  // connaissait pas), auquel cas elle revient où le serveur la voit.
+  const self = me >= 0 ? v.players[me] : undefined;
+  useEffect(() => {
+    if (!self) return;
+    const p = pred.current;
+    if (!p || !self.alive) {
+      pred.current = { x: self.x, y: self.y };
+      return;
+    }
+    const dx = self.x - p.x;
+    const dy = self.y - p.y;
+    const off = Math.hypot(dx, dy);
+    const holding = held.current.length > 0;
+    stuck.current = holding && !self.moving ? stuck.current + 1 : 0;
+    if (!holding) pred.current = off < 0.05 ? { x: self.x, y: self.y } : { x: p.x + dx * 0.5, y: p.y + dy * 0.5 };
+    else if (off > 1.25 || (stuck.current >= 3 && off > 0.3)) pred.current = { x: self.x, y: self.y };
+    // Le serveur parle vingt fois par seconde : c'est à ce rythme qu'on se recale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v]);
 
   const at = (c: number) => ({ left: `${((c % v.w) / v.w) * 100}%`, top: `${(Math.floor(c / v.w) / v.h) * 100}%` });
   // Une bombe glisse quand on la pousse : elle se place par un déplacement, pas par un saut.
@@ -240,11 +327,16 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
     // Seul ce qui change compte : la grille, les bonus, qui est debout.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.grid, upsKey, aliveKey]);
+  // Les boutons tactiles tiennent une direction comme le ferait une touche.
+  const press = (d: string) => {
+    held.current = d ? [d] : [];
+    act({ t: 'dir', d });
+  };
   const pad = (d: string) => ({
-    onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); act({ t: 'dir', d }); },
-    onPointerUp: () => act({ t: 'dir', d: '' }),
-    onPointerLeave: () => act({ t: 'dir', d: '' }),
-    onPointerCancel: () => act({ t: 'dir', d: '' }),
+    onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); press(d); },
+    onPointerUp: () => press(''),
+    onPointerLeave: () => held.current.length > 0 && press(''),
+    onPointerCancel: () => press(''),
   });
   const wait = Math.ceil((v.shrinkAt - now) / 1000);
   const mine = me >= 0 ? v.players[me] : null;
@@ -319,7 +411,7 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
           return <span key={f.id} className={`pd-player pd-dead seat-${f.seat}`} style={{ transform: `translate(${f.x! * 100}%, ${f.y! * 100}%)` }}><Bomber seat={f.seat!} face="d" /></span>;
         })}
         {v.players.map((p, seat) => p.alive && (
-          <span key={seat} className={`pd-player seat-${seat}${seat === me ? ' me' : ''}${p.moving ? ' walk' : ''}${p.vest ? ' vest' : ''}${p.spared ? ' spared' : ''}${p.cursed ? ' cursed' : ''}`} style={{ transform: `translate(${p.x * 100}%, ${p.y * 100}%)`, zIndex: 2 + Math.round(p.y) } as CSSProperties} aria-label={nameAt(st, seat)}>
+          <span key={seat} ref={seat === me ? pawn : undefined} className={`pd-player seat-${seat}${seat === me ? ' me' : ''}${p.moving ? ' walk' : ''}${p.vest ? ' vest' : ''}${p.spared ? ' spared' : ''}${p.cursed ? ' cursed' : ''}`} style={{ transform: seat === me && playing && pred.current ? `translate(${pred.current.x * 100}%, ${pred.current.y * 100}%)` : `translate(${p.x * 100}%, ${p.y * 100}%)`, zIndex: 2 + Math.round(p.y) } as CSSProperties} aria-label={nameAt(st, seat)}>
             <Bomber seat={seat} face={p.face} />
             <span className="pd-tag">{seat === me ? t('Vous', 'You') : nameAt(st, seat)}</span>
             {p.cursed && <span className="pd-skull"><Bonus k="x" /></span>}
