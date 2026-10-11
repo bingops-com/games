@@ -122,55 +122,6 @@ function ForgotDialog() {
   );
 }
 
-// Les pictogrammes de la navigation, de la même main que les dessins des jeux.
-const ICONS = {
-  // Jouer : deux cartes, celle du dessus marquée d'une étoile.
-  home: (
-    <>
-      <rect className="tint" x="3.5" y="6" width="10" height="14" rx="2.2" transform="rotate(-12 8.5 13)" />
-      <rect className="tint" x="10.5" y="4.5" width="10" height="14" rx="2.2" transform="rotate(10 15.5 11.5)" />
-      <path className="dot" d="M15.5 8.200l1 2.3 2.3 1-2.3 1-1 2.3-1-2.3-2.3-1 2.3-1z" />
-    </>
-  ),
-  // Amis : deux têtes rondes, comme les avatars.
-  friends: (
-    <>
-      <circle className="tint" cx="8.5" cy="9" r="4" />
-      <path className="tint" d="M2 20.500c.3-3.6 3-5.5 6.5-5.500s6.2 1.9 6.5 5.500z" />
-      <circle cx="17" cy="9.5" r="3.2" />
-      <path d="M17.5 15c2.7.2 4.3 2 4.5 5.5h-3.5" />
-    </>
-  ),
-  // Objectifs : la coupe.
-  goals: (
-    <>
-      <path className="tint" d="M7 3.500h10V9a5 5 0 0 1-10 0z" />
-      <path d="M7 5.500H4V7a3 3 0 0 0 3 3M17 5.500h3V7a3 3 0 0 1-3 3M12 14v3.500M8 20.500h8M9.5 17.500h5" />
-    </>
-  ),
-  // Magasin : un sac, sa anse et son étiquette.
-  shop: (
-    <>
-      <path className="tint" d="M5 8.5h14l-1 11.500H6z" />
-      <path d="M8.5 8.500V7a3.5 3.5 0 0 1 7 0v1.5" />
-      <circle className="dot" cx="12" cy="14" r="1.6" />
-    </>
-  ),
-  // Mon profil : une tête d'avatar, ses yeux et son sourire.
-  me: (
-    <>
-      <path className="tint" d="M12 3.500c5 0 8.5 3.4 8.5 8.300S17 20.5 12 20.500s-8.5-3.8-8.5-8.700S7 3.5 12 3.500z" />
-      <circle className="dot" cx="9" cy="10.5" r="1.4" />
-      <circle className="dot" cx="15" cy="10.5" r="1.4" />
-      <path d="M8.5 14.500q3.5 3 7 0" />
-    </>
-  ),
-};
-
-function Icon({ name }: { name: keyof typeof ICONS }) {
-  return <svg className="nav-ic" viewBox="0 0 24 24" aria-hidden="true">{ICONS[name]}</svg>;
-}
-
 // Les amis en ligne, dépliés depuis la bande : depuis un salon on les invite, sinon on
 // rejoint celui où ils jouent.
 function Pals() {
@@ -228,7 +179,7 @@ function Invites() {
         <Dialog key={`${inv.from}/${inv.code}`} title={t(`${inv.from} vous invite`, `${inv.from} invites you`)} onClose={() => App.ignoreInvite(inv)} className="ask-dialog">
           <Avatar code={inv.avatar} name={inv.from} className="chip-sea" />
           <p>{t(`${inv.from} joue dans le salon ${inv.code} et vous propose de le rejoindre.`, `${inv.from} is playing in room ${inv.code} and asks you to join.`)}</p>
-          <button className="btn primary" autoFocus onClick={() => join(inv)}>{t('Rejoindre le salon', 'Join the room')}</button>
+          <button className="btn primary" autoFocus onClick={() => join(inv)}><Ic name="anchor" />{t('Rejoindre le salon', 'Join the room')}</button>
           <button className="btn quiet" onClick={() => App.ignoreInvite(inv)}>{t('Plus tard', 'Later')}</button>
         </Dialog>
       );
@@ -239,7 +190,7 @@ function Invites() {
         <Dialog key={name} title={t(`${name} vous invite en ami`, `${name} wants to be friends`)} onClose={() => App.dismissAsk(name)} className="ask-dialog">
           <Avatar name={name} className="chip-sea" />
           <p>{t('Entre amis, on se voit en ligne et on s’invite dans un salon en un clic.', 'Friends see each other online and invite each other to a room in one click.')} <Link href={profilePath(name)} onClick={() => App.dismissAsk(name)}>{t('Voir son profil', 'See their profile')}</Link></p>
-          <button className="btn primary" autoFocus onClick={() => accept(name)}>{t('Accepter', 'Accept')}</button>
+          <button className="btn primary" autoFocus onClick={() => accept(name)}><Ic name="check" />{t('Accepter', 'Accept')}</button>
           <button className="btn quiet" onClick={() => App.dismissAsk(name)}>{t('Plus tard', 'Later')}</button>
         </Dialog>
       );
@@ -298,7 +249,7 @@ function Resume() {
         <strong>{table.code}</strong>
       </p>
       <button className="dots" onClick={() => App.remember(null)} aria-label={t(`Ne plus proposer le salon ${table.code}`, `Stop offering room ${table.code}`)} title={t('Ne plus le proposer', 'Stop offering it')}><Ic name="close" /></button>
-      <Link className="btn white small" href={`/t/?code=${table.code}`} aria-label={t(`Retourner au salon ${table.code}`, `Back to room ${table.code}`)}>{t('Y retourner', 'Go back')}</Link>
+      <Link className="btn white small" href={`/t/?code=${table.code}`} aria-label={t(`Retourner au salon ${table.code}`, `Back to room ${table.code}`)}><Ic name="anchor" />{t('Y retourner', 'Go back')}</Link>
     </div>
   );
 }
@@ -312,23 +263,23 @@ function Nav() {
   const n = account?.received ?? 0;
   return (
     <nav id="nav" aria-label={t('Navigation', 'Navigation')}>
-      <Link href="/" aria-current={cur('/')} title={t('Jouer', 'Play')}><Icon name="home" /><span>{t('Jouer', 'Play')}</span></Link>
+      <Link href="/" aria-current={cur('/')} title={t('Jouer', 'Play')}><Ic name="home" className="nav-ic" /><span>{t('Jouer', 'Play')}</span></Link>
       <Link href="/amis/" aria-current={cur('/amis/')} title={t('Amis', 'Friends')}>
-        <Icon name="friends" />
+        <Ic name="friends" className="nav-ic" />
         <span>{t('Amis', 'Friends')}</span>
         {n > 0 && <b className="pill count" aria-label={t(`${n} invitation${n > 1 ? 's' : ''} en attente`, `${n} pending invitation${n > 1 ? 's' : ''}`)}>{n}</b>}
       </Link>
       <Link href="/objectifs/" aria-current={cur('/objectifs/')} title={t('Objectifs', 'Objectives')}>
-        <Icon name="goals" />
+        <Ic name="cup" className="nav-ic" />
         <span>{t('Objectifs', 'Objectives')}</span>
         {account && objectives.length > 0 && <small className="nav-count">{done}/{objectives.length}</small>}
       </Link>
       <Link href="/magasin/" aria-current={cur('/magasin/')} title={t('Magasin', 'Shop')}>
-        <Icon name="shop" />
+        <Ic name="shop" className="nav-ic" />
         <span>{t('Magasin', 'Shop')}</span>
         {account && <small className="nav-count">{account.credits}</small>}
       </Link>
-      {account && <Link href={profilePath(account.name)} title={t('Mon profil', 'My profile')}><Icon name="me" /><span>{t('Mon profil', 'My profile')}</span></Link>}
+      {account && <Link href={profilePath(account.name)} title={t('Mon profil', 'My profile')}><Ic name="me" className="nav-ic" /><span>{t('Mon profil', 'My profile')}</span></Link>}
       <Pals />
     </nav>
   );
@@ -348,20 +299,20 @@ function Who() {
             <b><Name name={account.name} fx={account.fx} /></b>
           </Link>
           <div className="who-links">
-            <Link className="btn onsea small" href="/compte/">{t('Mon compte', 'My account')}</Link>
-            <button className="btn onsea small" onClick={() => App.signOut()}>{t('Se déconnecter', 'Sign out')}</button>
+            <Link className="btn onsea small" href="/compte/"><Ic name="sliders" />{t('Compte', 'Account')}</Link>
+            <button className="btn onsea small" onClick={() => App.signOut()} title={t('Se déconnecter', 'Sign out')}><Ic name="leave" />{t('Sortir', 'Sign out')}</button>
           </div>
         </>
       ) : (
         <div className="who-links">
-          <button className="btn white small" onClick={() => App.openModal('register')}>{t('Créer un compte', 'Create an account')}</button>
-          <button className="btn onsea small" onClick={() => App.openModal('login')}>{t('Se connecter', 'Sign in')}</button>
+          <button className="btn white small" onClick={() => App.openModal('register')}><Ic name="invite" />{t('Créer un compte', 'Create an account')}</button>
+          <button className="btn onsea small" onClick={() => App.openModal('login')}><Ic name="key" />{t('Se connecter', 'Sign in')}</button>
         </div>
       ))}
       <div className="who-foot">
         {/* Le bouton porte le nom de l'autre langue, écrit dans cette langue. */}
         <button className="lang" lang={other} onClick={() => App.setLang(other)} aria-label={other === 'en' ? 'Read this site in English' : 'Lire ce site en français'}>
-          {other === 'en' ? 'English' : 'Français'}
+          <Ic name="globe" />{other === 'en' ? 'English' : 'Français'}
         </button>
         <button className="lang sound" aria-pressed={sound} onClick={() => App.setSound(!sound)}>
           <Ic name={sound ? 'sound' : 'mute'} />{sound ? t('Son', 'Sound') : t('Son coupé', 'Sound off')}

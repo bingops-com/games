@@ -1,6 +1,6 @@
 'use client';
 
-import { Bar } from './ui';
+import { Bar, Ic } from './ui';
 import { App, useApp, useT } from '@/lib/app';
 import { Avatar, PartIcon, partName, slotName } from '@/lib/avatar';
 import { GROUPS, howOf, titleOf } from '@/lib/objectives';
@@ -48,7 +48,7 @@ export default function Objectives() {
           </p>
         )}
         <div className="actions">
-          <button className="btn primary" onClick={() => App.openModal('avatar')}>{t('Modifier mon avatar', 'Edit my avatar')}</button>
+          <button className="btn primary" onClick={() => App.openModal('avatar')}><Ic name="pencil" />{t('Modifier mon avatar', 'Edit my avatar')}</button>
           {!account && (
             <p className="hint">
               {t('Sans compte, vos parties ne débloquent rien.', 'Without an account, your games unlock nothing.')}{' '}

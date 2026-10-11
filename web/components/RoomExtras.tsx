@@ -5,7 +5,7 @@ import { App, useApp, useT } from '@/lib/app';
 import type { T } from '@/lib/i18n';
 import type { ChatLine, Member, Setting, TableLink, TableState } from '@/lib/table';
 import Chat from './Chat';
-import { Dialog } from './ui';
+import { Dialog, Ic } from './ui';
 
 // Ce qui entoure le jeu dans un salon : la discussion, ce qu'on peut faire d'un joueur
 // (lui passer la main, le retirer, le masquer, le bloquer, le signaler), et les réglages
@@ -79,17 +79,17 @@ export function MemberActions({ st, m, send, report, done }: { st: TableState; m
   const blocked = m.account && !!account?.blocked.includes(m.name);
   return (
     <>
-      {host && <button className="pill ghost" onClick={() => { send({ t: 'host', id: m.id }); done(); }}>{t('Nommer hôte', 'Make host')}</button>}
+      {host && <button className="pill ghost" onClick={() => { send({ t: 'host', id: m.id }); done(); }}><Ic name="crown" />{t('Nommer hôte', 'Make host')}</button>}
       {host && (sure
         ? <button className="pill" onClick={() => { send({ t: 'kick', id: m.id }); done(); }}>{t('Confirmer le retrait', 'Confirm removal')}</button>
-        : <button className="pill ghost" onClick={() => setSure(true)}>{t('Retirer du salon', 'Remove from room')}</button>)}
-      <button className="pill ghost" onClick={() => { App.toggleMute(m.id); done(); }}>{isMuted ? t('Réafficher ses messages', 'Show their messages') : t('Masquer ses messages', 'Hide their messages')}</button>
+        : <button className="pill ghost" onClick={() => setSure(true)}><Ic name="remove" />{t('Retirer du salon', 'Remove from room')}</button>)}
+      <button className="pill ghost" onClick={() => { App.toggleMute(m.id); done(); }}><Ic name={isMuted ? 'talk' : 'hush'} />{isMuted ? t('Réafficher ses messages', 'Show their messages') : t('Masquer ses messages', 'Hide their messages')}</button>
       {account && m.account && (
         <button className="pill ghost" onClick={() => { App.block(blocked ? 'remove' : 'add', m.name).then(() => App.toast(blocked ? t(`${m.name} débloqué`, `${m.name} unblocked`) : t(`${m.name} bloqué`, `${m.name} blocked`)), (err: Error) => App.toast(err.message)); done(); }}>
-          {blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}
+          <Ic name="block" />{blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}
         </button>
       )}
-      <button className="pill ghost" onClick={() => { report(m); done(); }}>{t('Signaler', 'Report')}</button>
+      <button className="pill ghost" onClick={() => { report(m); done(); }}><Ic name="flag" />{t('Signaler', 'Report')}</button>
     </>
   );
 }
@@ -102,7 +102,7 @@ export function MemberMenu({ st, m, send, report }: { st: TableState; m: Member;
   return (
     <>
       <button className="dots" aria-expanded={open} aria-label={t(`Actions pour ${m.name}`, `Actions for ${m.name}`)} onClick={() => setOpen(!open)}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+        <Ic name="dots" />
       </button>
       {open && <div className="member-menu"><MemberActions st={st} m={m} send={send} report={report} done={() => setOpen(false)} /></div>}
     </>

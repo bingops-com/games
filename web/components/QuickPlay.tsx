@@ -5,7 +5,7 @@ import { GAMES, playersOf } from '@/games/catalog';
 import { App, useT } from '@/lib/app';
 import { GameCover } from '@/lib/art';
 import { Avatar } from '@/lib/avatar';
-import { Bar, Dialog } from './ui';
+import { Bar, Dialog, Ic } from './ui';
 
 // Un salon public qui attend des joueurs, tel que le serveur le liste.
 interface PublicRoom {
@@ -62,7 +62,7 @@ export default function QuickPlay({ busy, join, open, close }: { busy: boolean; 
                 <h3>{g.name}</h3>
                 <small>{playersOf(g, t)}</small>
                 <b className="pill">{n > 0 ? t(`${n} en attente`, `${n} waiting`) : t('Personne', 'Nobody')}</b>
-                <button className="btn quiet small" disabled={busy} onClick={() => open(g.id)}>{t('Ouvrir un salon', 'Open a room')}</button>
+                <button className="btn quiet small" disabled={busy} onClick={() => open(g.id)}><Ic name="wheel" />{t('Ouvrir un salon', 'Open a room')}</button>
               </div>
               {list.length > 0 && (
                 <ul className="quick-rooms rows">
@@ -79,7 +79,7 @@ export default function QuickPlay({ busy, join, open, close }: { busy: boolean; 
                           <b>{r.players}/{r.max}</b>
                           <Bar value={r.players} max={r.max} label={t(`${r.players} joueurs sur ${r.max} places`, `${r.players} players out of ${r.max} seats`)} />
                         </span>
-                        <button className="btn primary small" disabled={busy} onClick={() => join(r.code)}>{t('Rejoindre', 'Join')}</button>
+                        <button className="btn primary small" disabled={busy} onClick={() => join(r.code)}><Ic name="anchor" />{t('Rejoindre', 'Join')}</button>
                       </li>
                     );
                   })}

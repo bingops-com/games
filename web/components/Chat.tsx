@@ -94,13 +94,13 @@ export default function Chat({ lines, members, you, send }: { lines: ChatLine[];
       </div>
       {unseen > 0 && (
         <button className="pill chat-new" onClick={toEnd}>
-          <Ic name="down" />{t(`${unseen} nouveau${unseen > 1 ? 'x' : ''} message${unseen > 1 ? 's' : ''}`, `${unseen} new message${unseen === 1 ? '' : 's'}`)}
+          <Ic name="below" />{t(`${unseen} nouveau${unseen > 1 ? 'x' : ''} message${unseen > 1 ? 's' : ''}`, `${unseen} new message${unseen === 1 ? '' : 's'}`)}
         </button>
       )}
       <form className="chat-form" onSubmit={say}>
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={MAX} placeholder={t('Écrire aux autres…', 'Write to the others…')} aria-label={t('Votre message', 'Your message')} autoComplete="off" enterKeyHint="send" />
         {text.length > MAX - 40 && <span className="chat-count" aria-hidden="true">{MAX - text.length}</span>}
-        <button className="btn primary icon" disabled={!text.trim()} aria-label={t('Envoyer', 'Send')}><Ic name="send" /></button>
+        <button className="btn primary icon" disabled={!text.trim()} aria-label={t('Envoyer', 'Send')}><Ic name="boat" /></button>
       </form>
     </section>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { Ic } from './ui';
 import { useEffect, useState } from 'react';
 import { App, useApp, useT } from '@/lib/app';
 import { Avatar, PARTS, PartIcon, SLOTS, encode, fromShop, lockOf, parse, partName, randomLook, slotName, type Look, type Slot } from '@/lib/avatar';
@@ -63,7 +64,7 @@ export default function AvatarEditor() {
           <h2 id="look-title">{t('Votre avatar', 'Your avatar')}</h2>
           <div className="look-stage sea"><Avatar code={encode(look)} /></div>
           <b className="look-name">{name}</b>
-          <button className="btn quiet" onClick={() => { setLocked(null); setLook(randomLook()); }}>{t('Au hasard', 'Random')}</button>
+          <button className="btn quiet" onClick={() => { setLocked(null); setLook(randomLook()); }}><Ic name="dice" />{t('Au hasard', 'Random')}</button>
           <p className="hint">
             {account
               ? t('Enregistré sur votre compte, visible sur votre profil.', 'Saved to your account, shown on your profile.')
@@ -107,7 +108,7 @@ export default function AvatarEditor() {
             )}
           </p>
           <div className="row-actions">
-            <button className="btn primary" disabled={busy} onClick={save}>{t('Enregistrer l’avatar', 'Save avatar')}</button>
+            <button className="btn primary" disabled={busy} onClick={save}><Ic name="check" />{t('Enregistrer l’avatar', 'Save avatar')}</button>
             <button className="btn quiet" onClick={() => App.openModal(null)}>{t('Annuler', 'Cancel')}</button>
           </div>
         </div>

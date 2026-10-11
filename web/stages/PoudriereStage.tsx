@@ -1,5 +1,6 @@
 'use client';
 
+import { Ic } from '@/lib/icons';
 import { play } from '@/lib/sound';
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
@@ -443,10 +444,10 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       {playing && (
         <div className="pd-pad">
           <div className="pd-cross">
-            <button className="pd-u" aria-label={t('Haut', 'Up')} {...pad('u')}>▲</button>
-            <button className="pd-l" aria-label={t('Gauche', 'Left')} {...pad('l')}>◀</button>
-            <button className="pd-r" aria-label={t('Droite', 'Right')} {...pad('r')}>▶</button>
-            <button className="pd-d" aria-label={t('Bas', 'Down')} {...pad('d')}>▼</button>
+            <button className="pd-u" aria-label={t('Haut', 'Up')} {...pad('u')}><Ic name="up" /></button>
+            <button className="pd-l" aria-label={t('Gauche', 'Left')} {...pad('l')}><Ic name="left" /></button>
+            <button className="pd-r" aria-label={t('Droite', 'Right')} {...pad('r')}><Ic name="right" /></button>
+            <button className="pd-d" aria-label={t('Bas', 'Down')} {...pad('d')}><Ic name="down" /></button>
           </div>
           <button className="btn white pd-drop" onPointerDown={(e) => { e.preventDefault(); act({ t: 'bomb' }); }}>{t('Poser une bombe', 'Lay a bomb')}</button>
         </div>

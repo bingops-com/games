@@ -1,6 +1,6 @@
 'use client';
 
-import { Bar } from './ui';
+import { Bar, Ic } from './ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -56,8 +56,8 @@ function Actions({ p, reload }: { p: ProfileData; reload: () => void }) {
       return (
         <div className="actions">
           <div className="row-actions">
-            <button className="btn primary" onClick={() => App.copy(profileLink(p.name), t('Lien copié', 'Link copied'))}>{t('Copier le lien du profil', 'Copy profile link')}</button>
-            <button className="btn quiet" onClick={() => App.openModal('avatar')}>{t('Modifier mon avatar', 'Edit my avatar')}</button>
+            <button className="btn primary" onClick={() => App.copy(profileLink(p.name), t('Lien copié', 'Link copied'))}><Ic name="link" />{t('Copier le lien du profil', 'Copy profile link')}</button>
+            <button className="btn quiet" onClick={() => App.openModal('avatar')}><Ic name="pencil" />{t('Modifier mon avatar', 'Edit my avatar')}</button>
           </div>
           <p className="hint">{t('Votre profil est public : toute personne qui a ce lien voit votre pseudo, vos statistiques et votre nombre d’amis, et peut vous inviter.', 'Your profile is public: anyone with this link sees your username, your statistics and how many friends you have, and can invite you.')}</p>
         </div>
@@ -89,7 +89,7 @@ function Actions({ p, reload }: { p: ProfileData; reload: () => void }) {
     default:
       return (
         <div className="actions">
-          <button className="btn primary" onClick={() => act('invite', t(`Invitation envoyée à ${p.name}`, `Invitation sent to ${p.name}`))}>{t('Inviter en ami', 'Add as a friend')}</button>
+          <button className="btn primary" onClick={() => act('invite', t(`Invitation envoyée à ${p.name}`, `Invitation sent to ${p.name}`))}><Ic name="invite" />{t('Inviter en ami', 'Add as a friend')}</button>
         </div>
       );
   }

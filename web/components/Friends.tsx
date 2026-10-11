@@ -1,5 +1,6 @@
 'use client';
 
+import { Ic } from './ui';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { App, dateOf, profileLink, profilePath, useApp, useT, type Friend } from '@/lib/app';
@@ -51,7 +52,7 @@ export default function Friends() {
         <label htmlFor="pseudo">{t('Inviter un joueur', 'Invite a player')}</label>
         <div className="join-row">
           <input id="pseudo" value={pseudo} onChange={(e) => setPseudo(e.target.value)} placeholder={t('Son pseudo', 'Their username')} autoComplete="off" spellCheck={false} maxLength={16} />
-          <button className="btn primary">{t('Envoyer l’invitation', 'Send invitation')}</button>
+          <button className="btn primary"><Ic name="invite" />{t('Envoyer l’invitation', 'Send invitation')}</button>
         </div>
         <p className="hint">
           {t('Il ne connaît pas encore votre pseudo ? Envoyez-lui votre profil, il pourra vous inviter depuis la page.', 'They do not know your username yet? Send them your profile: they can invite you from the page.')}{' '}
@@ -67,7 +68,7 @@ export default function Friends() {
               <li key={f.name}>
                 {who(f)}
                 <div className="row-actions">
-                  <button className="btn primary small" onClick={() => act('accept', f.name, nowFriends)}>{t('Accepter', 'Accept')}</button>
+                  <button className="btn primary small" onClick={() => act('accept', f.name, nowFriends)}><Ic name="check" />{t('Accepter', 'Accept')}</button>
                   <button className="btn quiet small" onClick={() => act('remove', f.name, () => t('Invitation refusée', 'Invitation declined'))}>{t('Refuser', 'Decline')}</button>
                 </div>
               </li>

@@ -71,21 +71,6 @@
 .nav-ic {
   width: 1.7rem;
   height: 1.7rem;
-  flex: none;
-  fill: none;
-  stroke: #fff;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.nav-ic .tint {
-  fill: #fff;
-  fill-opacity: 0.22;
-  transition: fill-opacity 0.15s;
-}
-.nav-ic .dot {
-  fill: #fff;
-  stroke: none;
 }
 #nav a:hover .nav-ic .tint,
 #nav a[aria-current='page'] .nav-ic .tint {
@@ -378,13 +363,16 @@
   justify-content: space-between;
   gap: 0.75rem;
 }
-.lang.sound {
+.lang {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   text-decoration: none;
 }
-.lang.sound .ic {
+.lang:hover {
+  text-decoration: underline;
+}
+.lang .ic {
   width: 1.1rem;
   height: 1.1rem;
 }
@@ -1069,10 +1057,18 @@ img.art {
   flex: 1.6;
   padding-inline: 1rem;
 }
+.start-go .btn {
+  min-width: 0;
+  gap: 0.4rem;
+}
 .start-go .btn.quiet {
-  flex: 1;
-  padding-inline: 0.75rem;
-  font-size: 1.05rem;
+  flex: 1.25;
+  padding-inline: 0.6rem;
+  font-size: 1rem;
+}
+.start-go .btn.quiet .ic {
+  width: 1.3rem;
+  height: 1.3rem;
 }
 
 /* --- Avatars, atelier et objectifs ------------------------------------------------- */
@@ -2255,4 +2251,35 @@ img.art {
   flex-wrap: wrap;
   gap: 0.75rem;
   color: var(--ink-soft);
+}
+
+/* Les pictogrammes dans les petites étiquettes : la couronne de l'hôte, le crayon de l'avatar. */
+.start-avatar span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+}
+.start-avatar .ic {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+.field-head .as-link .ic {
+  width: 1rem;
+  height: 1rem;
+}
+.account h2 .ic {
+  color: var(--link);
+}
+.kit-icons span {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  width: 4.25rem;
+  font-size: 0.6875rem;
+}
+.kit-icons .ic {
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--ink);
 }

@@ -3460,3 +3460,22 @@ button.crew-chip:hover,
 .gk-field {
   animation: rise 0.3s var(--ease) backwards;
 }
+
+/* Les pictogrammes dans le salon et sur les scènes. */
+.crew-chip b .ic {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.15rem;
+  vertical-align: -0.1em;
+}
+.pd-cross .ic {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.pd-cross .ic .tint {
+  fill-opacity: 1;
+}
+.room-code .ic {
+  width: 1rem;
+  height: 1rem;
+}

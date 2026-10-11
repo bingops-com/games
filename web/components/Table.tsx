@@ -92,7 +92,7 @@ function Crew({ st, send, report, free }: { st: TableState; send: TableLink['sen
           const inside = (
             <>
               <Avatar code={m.avatar} name={m.name} />
-              <b><Name name={m.name} fx={m.fx} /></b>
+              <b>{m.id === st.host && <Ic name="crown" />}<Name name={m.name} fx={m.fx} /></b>
               <small>{statusOf(st, m, t)}</small>
               {m.wins > 0 && <Wins n={m.wins} />}
             </>
@@ -132,7 +132,7 @@ function Band({ st, link, report }: { st: TableState; link: TableLink; report: (
       <button className="room-code" onClick={() => App.copy(roomLink(st.code), t('Lien d’invitation copié', 'Invitation link copied'))} aria-label={t(`Salon ${st.code}, copier le lien d'invitation`, `Room ${st.code}, copy the invitation link`)}>
         <small>{t('Salon', 'Room')}</small>
         <strong>{st.code}</strong>
-        <span><Ic name="copy" />{t('Copier le lien d’invitation', 'Copy invitation link')}</span>
+        <span><Ic name="link" />{t('Copier le lien d’invitation', 'Copy invitation link')}</span>
       </button>
       <button className="btn onsea small room-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         {t(`${n} joueur${n > 1 ? 's' : ''}`, `${n} player${n === 1 ? '' : 's'}`)}
@@ -158,7 +158,7 @@ function Rules({ game, close }: { game: Game; close: () => void }) {
       <ul className="rules rows">
         {rulesOf(game, lang).map((r) => <li key={r}>{r}</li>)}
       </ul>
-      <button className="btn primary" autoFocus onClick={close}>{t('Compris', 'Got it')}</button>
+      <button className="btn primary" autoFocus onClick={close}><Ic name="check" />{t('Compris', 'Got it')}</button>
     </Dialog>
   );
 }
@@ -204,7 +204,7 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
           <p className={blocked ? 'lobby-hint' : 'lobby-hint ok'}>
             {blocked || (host ? t('Tout le monde est là ? Lancez !', 'Everyone here? Start!') : t(`On attend que ${hostName} lance la partie.`, `Waiting for ${hostName} to start.`))}
           </p>
-          {host && <button className="btn primary big" disabled={!!blocked} onClick={() => send({ t: 'start' })}>{t('Lancer la partie', 'Start the game')}</button>}
+          {host && <button className="btn primary big" disabled={!!blocked} onClick={() => send({ t: 'start' })}><Ic name="play" />{t('Lancer la partie', 'Start the game')}</button>}
         </div>
       </section>
 
@@ -217,7 +217,7 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
         <div className="lobby-invite">
           <div className="invite-row">
             <span className="invite-link">{url.replace(/^https?:\/\//, '')}</span>
-            <button className="btn white small" onClick={() => App.copy(url, t('Lien d’invitation copié', 'Invitation link copied'))}><Ic name="copy" />{t('Copier', 'Copy')}</button>
+            <button className="btn white small" onClick={() => App.copy(url, t('Lien d’invitation copié', 'Invitation link copied'))}><Ic name="link" />{t('Copier', 'Copy')}</button>
           </div>
           {host ? (
             <div className="lobby-host">
@@ -227,9 +227,9 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
               </label>
               <div className="lobby-limit" role="group" aria-label={t('Places dans le salon', 'Seats in the room')} title={t(`De ${seatsMin} à ${seatsMax} places pour ce jeu`, `From ${seatsMin} to ${seatsMax} seats for this game`)}>
                 <span>{t('Places', 'Seats')}</span>
-                <button className="btn onsea small icon" disabled={seats <= seatsMin} onClick={() => send({ t: 'limit', a: seats - 1 })} aria-label={t('Une place de moins', 'One seat fewer')}>−</button>
+                <button className="btn onsea small icon" disabled={seats <= seatsMin} onClick={() => send({ t: 'limit', a: seats - 1 })} aria-label={t('Une place de moins', 'One seat fewer')}><Ic name="minus" /></button>
                 <b aria-live="polite">{seats}</b>
-                <button className="btn onsea small icon" disabled={seats >= seatsMax} onClick={() => send({ t: 'limit', a: seats + 1 })} aria-label={t('Une place de plus', 'One more seat')}>+</button>
+                <button className="btn onsea small icon" disabled={seats >= seatsMax} onClick={() => send({ t: 'limit', a: seats + 1 })} aria-label={t('Une place de plus', 'One more seat')}><Ic name="plus" /></button>
               </div>
             </div>
           ) : (
@@ -348,9 +348,9 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
           {playing ? <b>{game.name}</b> : <b>{t(`Salon ${st.code}`, `Room ${st.code}`)}</b>}
           {st.seat < 0 && playing && <span>{t('Vous regardez : vous jouerez la prochaine partie.', 'You are watching: you will play the next game.')}</span>}
           <span className="board-tools">
-            {playing && <button className="btn onsea small" onClick={() => setRules(true)}>{t('Règles', 'Rules')}</button>}
-            {playing && host && st.phase === 'playing' && <button className="btn onsea small" onClick={() => link.send({ t: 'lobby' })}>{t('Arrêter la partie', 'Stop the game')}</button>}
-            <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}>{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
+            {playing && <button className="btn onsea small" onClick={() => setRules(true)}><Ic name="book" />{t('Règles', 'Rules')}</button>}
+            {playing && host && st.phase === 'playing' && <button className="btn onsea small" onClick={() => link.send({ t: 'lobby' })}><Ic name="stop" />{t('Arrêter la partie', 'Stop the game')}</button>}
+            <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}><Ic name={full ? 'shrink' : 'expand'} />{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
           </span>
         </div>
         {playing ? <Stage st={st} skew={link.skew} act={link.act} /> : <Lobby st={st} game={game} link={link} rules={() => setRules(true)} report={setReported} />}
@@ -362,8 +362,8 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
               <After played={st.seat >= 0} voided={st.void} />
               {host ? (
                 <div className="row-actions">
-                  <button className="btn primary big" onClick={() => link.send({ t: 'start' })}>{t('Rejouer', 'Play again')}</button>
-                  <button className="btn quiet" onClick={() => link.send({ t: 'lobby' })}>{t('Changer de jeu', 'Change game')}</button>
+                  <button className="btn primary big" onClick={() => link.send({ t: 'start' })}><Ic name="again" />{t('Rejouer', 'Play again')}</button>
+                  <button className="btn quiet" onClick={() => link.send({ t: 'lobby' })}><Ic name="home" />{t('Changer de jeu', 'Change game')}</button>
                 </div>
               ) : (
                 <p>{t(`${hostName} relance une partie ou change de jeu.`, `${hostName} starts another game or changes game.`)}</p>

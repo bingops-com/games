@@ -5,14 +5,14 @@ import { App, useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import type { ChatLine, Member } from '@/lib/table';
 import Chat from './Chat';
-import { Bar, Dialog, Field, Ic, type IconName } from './ui';
+import { Bar, Dialog, Field, Ic, ICON_NAMES } from './ui';
 
 // La page du kit : chaque pièce de l'interface, sur le papier et sur la mer, telle que les
 // pages l'emploient. Elle sert à choisir une pièce avant d'en écrire une nouvelle, et à
 // vérifier d'un coup d'œil les deux thèmes.
 
 const COLORS = ['ground', 'surface', 'tint', 'line', 'field-line', 'ink-soft', 'ink', 'sea', 'sea-deep', 'navy', 'mint', 'danger'];
-const ICONS: IconName[] = ['send', 'close', 'copy', 'talk', 'down', 'cup', 'leave', 'check', 'coin', 'lock'];
+const ICONS = ICON_NAMES;
 
 const who = (id: string, name: string, extra: Partial<Member> = {}): Member => ({ id, name, account: false, on: true, seat: -1, wins: 0, avatar: '', fx: '', ...extra } as Member);
 const CREW = [who('a', 'Mousse-417'), who('b', 'Poulpe-Tenace', { wins: 2 }), who('c', 'Crevette-Sage', { on: false })];
@@ -91,7 +91,7 @@ export default function UiKit() {
           {COLORS.map((c) => <li key={c}><i style={{ background: `var(--${c})` }} /><code>--{c}</code></li>)}
         </ul>
         <div className="kit-icons">
-          {ICONS.map((i) => <span key={i} title={i}><Ic name={i} /></span>)}
+          {ICONS.map((i) => <span key={i}><Ic name={i} /><code>{i}</code></span>)}
         </div>
       </Piece>
 

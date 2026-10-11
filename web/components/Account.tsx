@@ -54,7 +54,7 @@ export default function Account() {
       <p className="pitch">{account.name}</p>
 
       <section>
-        <h2>{t('Adresse e-mail', 'Email address')}</h2>
+        <h2><Ic name="mail" />{t('Adresse e-mail', 'Email address')}</h2>
         {account.email ? (
           <p className={account.emailChecked ? 'email-state ok' : 'email-state'} role="status">
             <Ic name={account.emailChecked ? 'check' : 'lock'} />
@@ -81,7 +81,7 @@ export default function Account() {
       </section>
 
       <section>
-        <h2>{t('Mot de passe', 'Password')}</h2>
+        <h2><Ic name="key" />{t('Mot de passe', 'Password')}</h2>
         <form className="stack" onSubmit={savePassword}>
           <label>
             {t('Mot de passe actuel', 'Current password')}
@@ -96,7 +96,7 @@ export default function Account() {
       </section>
 
       <section>
-        <h2>{t('Joueurs bloqués', 'Blocked players')}</h2>
+        <h2><Ic name="block" />{t('Joueurs bloqués', 'Blocked players')}</h2>
         {account.blocked.length === 0 ? (
           <p className="hint">{t('Personne. Vous pouvez bloquer un joueur depuis un salon, avec les trois points à côté de son nom.', 'Nobody. You can block a player from a room, with the three dots next to their name.')}</p>
         ) : (
