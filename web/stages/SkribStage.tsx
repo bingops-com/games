@@ -72,7 +72,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
     <div className="skrib">
       {guide}
       <div className="sk-top">
-        <strong className="sk-word" lang="fr" aria-label={t('Le mot à trouver', 'The word to find')}>{v.phase === 'choose' ? '' : v.word || v.mask}</strong>
+        <strong className={`sk-word${v.phase === 'reveal' ? ' told' : ''}`} key={v.phase === 'reveal' ? 'told' : 'word'} lang="fr" aria-label={t('Le mot à trouver', 'The word to find')}>{v.phase === 'choose' ? '' : v.word || v.mask}</strong>
         <span>{t(`Tour ${v.turn} sur ${v.turns}`, `Turn ${v.turn} of ${v.turns}`)}</span>
         {v.phase === 'draw' && (
           <span className="timer">
@@ -86,7 +86,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
           {v.phase === 'choose' ? (
             <div className="sk-choose" lang="fr">
               {drawer
-                ? v.choices.map((w, i) => <button key={w} className="btn white big" onClick={() => act({ t: 'choose', i })}>{w}</button>)
+                ? v.choices.map((w, i) => <button key={w} className="btn white big" style={{ animationDelay: `${i * 80}ms` }} onClick={() => act({ t: 'choose', i })}>{w}</button>)
                 : <p lang="">{t(`${artist} choisit son mot…`, `${artist} is choosing a word…`)}</p>}
             </div>
           ) : (

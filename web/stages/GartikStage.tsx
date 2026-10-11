@@ -55,7 +55,7 @@ export default function GartikStage({ st, skew, act }: StageProps<View>) {
     const reader = me === v.reader;
     const last = v.pages.length === v.total && v.chain === v.chains - 1;
     const show = (item: Item, small?: boolean) => (
-      <figure className={`gk-page${small ? ' small' : ''}`}>
+      <figure key={`${v.chain}-${v.pages.indexOf(item)}-${small ? 's' : 'l'}`} className={`gk-page${small ? ' small' : ''}`}>
         <figcaption>{item.draw ? t(`${nameAt(st, item.seat)} a dessiné`, `${nameAt(st, item.seat)} drew`) : v.pages.indexOf(item) === 0 ? t(`${nameAt(st, item.seat)} a écrit`, `${nameAt(st, item.seat)} wrote`) : t(`${nameAt(st, item.seat)} a vu`, `${nameAt(st, item.seat)} saw`)}</figcaption>
         {item.draw ? <Pad strokes={item.strokes} k={`album-${v.chain}-${v.pages.indexOf(item)}`} /> : <blockquote>{item.text || nothing}</blockquote>}
       </figure>

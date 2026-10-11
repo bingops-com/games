@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import type { T } from '@/lib/i18n';
@@ -176,7 +176,7 @@ export default function PavillonsStage(props: StageProps<View>) {
         {told && v.phase === 'play' && !v.clue && <p className="pav-told">{told}</p>}
         {v.phase === 'play' && v.clue && (
           <p>
-            {t(`Indice de ${turnTeam} :`, `${turnTeam}'s clue:`)} <strong className="clue-word">{v.clue.word}</strong> <strong>{v.clue.count}</strong>
+            {t(`Indice de ${turnTeam} :`, `${turnTeam}'s clue:`)} <strong className="clue-word" key={`${v.clue.word}-${v.clues.length}`}>{v.clue.word} <b>{v.clue.count}</b></strong>
             <span>{v.clue.count === 0 ? t('Autant de mots que vous voulez.', 'As many words as you like.') : t(`Encore ${v.left} mot${v.left > 1 ? 's' : ''} au plus.`, `${v.left} more word${v.left === 1 ? '' : 's'} at most.`)}</span>
             {canGuess && <button className="btn onsea small" onClick={() => act({ t: 'end' })}>{t('Passer le tour', 'End the turn')}</button>}
           </p>
@@ -189,7 +189,7 @@ export default function PavillonsStage(props: StageProps<View>) {
           const k = v.key[i];
           const shown = v.revealed[i];
           return (
-            <li key={w}>
+            <li key={w} style={{ '--i': i } as CSSProperties}>
               <button
                 className={`word${k >= 0 ? ` is-${KIND[k]}` : ''}${shown ? ' shown' : ''}`}
                 disabled={!canGuess || shown}

@@ -1755,6 +1755,82 @@ button.crew-chip:hover,
   font-weight: 700;
 }
 
+/* Codenoms en mouvement : la grille se distribue, un mot retourné bascule, l'équipe dont
+   c'est le tour respire, l'indice claque. */
+.pav-side .pav-who {
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  animation: join 0.35s var(--ease) backwards;
+}
+.pav-who .avatar {
+  width: 2.25rem;
+}
+.pav-who b {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pav-who span {
+  flex: none;
+}
+.pav-grid li {
+  animation: pav-deal 0.4s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+@keyframes pav-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-1.2rem) rotate(-4deg) scale(0.9);
+  }
+}
+.word {
+  transition: transform 0.15s var(--ease), box-shadow 0.15s;
+}
+.word:not(:disabled):hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0.4rem 0.9rem rgb(4 16 66 / 0.4);
+}
+.word:not(:disabled):active {
+  transform: scale(0.97);
+}
+.word.shown {
+  animation: pav-flip 0.5s cubic-bezier(0.3, 0.7, 0.3, 1.2) backwards;
+}
+@keyframes pav-flip {
+  from {
+    transform: perspective(40rem) rotateX(-180deg);
+    background: #fff;
+  }
+  45% {
+    transform: perspective(40rem) rotateX(-90deg);
+    background: #fff;
+  }
+}
+.pav-team {
+  transition: background 0.3s, transform 0.3s var(--ease);
+}
+.pav-team.turn {
+  animation: pav-turn 1.8s ease-in-out infinite;
+}
+@keyframes pav-turn {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.clue-word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.1rem 0.8rem;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--navy);
+  animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
 /* --- BoomParty -------------------------------------------------------------- */
 
 .meche {
@@ -3318,4 +3394,65 @@ button.crew-chip:hover,
 .pav-who .avatar {
   grid-row: span 2;
   width: 2rem;
+}
+
+/* Skribouille et Gartik Phone en mouvement : les mots proposés se posent, le mot révélé
+   claque, les points gagnés sautent, une proposition arrive, une page se tourne. */
+.sk-choose .btn {
+  animation: pav-deal 0.4s var(--ease) backwards;
+}
+.sk-word.told {
+  padding: 0.1rem 0.9rem;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--navy);
+  letter-spacing: 0.04em;
+  animation: pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+.sk-scores li {
+  transition: background 0.3s;
+}
+.sk-scores i {
+  display: inline-block;
+  font-style: normal;
+  color: var(--mint);
+  animation: sk-gain 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+@keyframes sk-gain {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem) scale(0.5);
+  }
+}
+.sk-log li {
+  animation: rise 0.22s var(--ease) backwards;
+}
+.sk-log li.found {
+  animation: sk-found 0.6s var(--ease) backwards;
+}
+@keyframes sk-found {
+  from {
+    transform: scale(1.12);
+    background: var(--veil-strong);
+  }
+}
+.gk-album {
+  perspective: 70rem;
+}
+.gk-page {
+  transform-origin: 0 50%;
+  animation: gk-turn 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+}
+.gk-page.small {
+  animation: rise 0.3s var(--ease) backwards;
+}
+@keyframes gk-turn {
+  from {
+    opacity: 0;
+    transform: rotateY(-75deg);
+  }
+}
+.gk-write,
+.gk-field {
+  animation: rise 0.3s var(--ease) backwards;
 }
