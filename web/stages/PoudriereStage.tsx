@@ -106,31 +106,16 @@ function Emblem({ seat }: { seat: number }) {
   );
 }
 
-// Un poseur de bombes : casque blanc à antenne, combinaison de la couleur du joueur. Il
-// regarde où il va (de dos quand il monte), et ses pieds marchent quand il avance.
-const Bomber = memo(function Bomber({ seat, face }: { seat: number; face: string }) {
+// Le pion d'un joueur : son avatar, tel qu'il l'a composé, posé sur deux petits pieds et sur
+// un socle de sa couleur. Il se tourne du côté où il va, et ses pieds marchent quand il avance.
+const Pawn = memo(function Pawn({ code, name, face }: { code: string; name: string; face: string }) {
   return (
-    <svg className={`pd-bomber face-${face}`} viewBox="0 0 48 56" aria-hidden="true">
-      <ellipse className="bm-shadow" cx="24" cy="52" rx="13" ry="3.500" />
-      <g className="bm-all">
-        <rect className="bm-foot bm-foot-l" x="14.500" y="45" width="8" height="7" rx="3" />
-        <rect className="bm-foot bm-foot-r" x="25.500" y="45" width="8" height="7" rx="3" />
-        <circle className="bm-suit" cx="11.500" cy="38" r="4" />
-        <circle className="bm-suit" cx="36.500" cy="38" r="4" />
-        <rect className="bm-suit" x="13" y="29" width="22" height="19" rx="7" />
-        <g className="bm-mark"><Emblem seat={seat} /></g>
-        <path className="bm-stem" d="M24 6V2.500" />
-        <circle className="bm-suit" cx="24" cy="2.800" r="2.800" />
-        <circle className="bm-head" cx="24" cy="19" r="14.500" />
-        {face !== 'u' && (
-          <g className="bm-face">
-            <rect className="bm-visor" x="12.500" y="12.500" width="23" height="14" rx="7" />
-            <ellipse className="bm-eye" cx="19.500" cy="19.500" rx="2" ry="4" />
-            <ellipse className="bm-eye" cx="28.500" cy="19.500" rx="2" ry="4" />
-          </g>
-        )}
-      </g>
-    </svg>
+    <span className={`pd-pawn face-${face}`} aria-hidden="true">
+      <i className="pw-base" />
+      <i className="pw-foot pw-foot-l" />
+      <i className="pw-foot pw-foot-r" />
+      <Avatar code={code} name={name} />
+    </span>
   );
 });
 
@@ -369,7 +354,7 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       </Guide>
     );
   } else if (ready > 0 && mine) {
-    guide = <Guide tone="alert" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{t(`Vous êtes le poseur de bombes cerclé de menthe, ${corner}. Flèches ou ZQSD pour bouger, Espace pour poser une bombe.`, `You are the piece ringed in mint, ${corner}. Arrow keys or WASD to move, Space to lay a bomb.`)}</Guide>;
+    guide = <Guide tone="alert" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{t(`Vous êtes l’avatar cerclé de menthe, ${corner}. Flèches ou ZQSD pour bouger, Espace pour poser une bombe.`, `You are the piece ringed in mint, ${corner}. Arrow keys or WASD to move, Space to lay a bomb.`)}</Guide>;
   } else if (ready > 0) {
     guide = <Guide tone="wait" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{watching}</Guide>;
   } else if (mine && !mine.alive) {
@@ -420,11 +405,11 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
         {fx.map((f) => {
           if (f.kind === 'pop') return <span key={f.id} className="pd-pop" style={at(f.cell!)}><i /><i /><i /><i /></span>;
           if (f.kind === 'word') return <b key={f.id} className={`pd-word seat-${f.seat}`} style={at(f.cell!)}>{f.text}</b>;
-          return <span key={f.id} className={`pd-player pd-dead seat-${f.seat}`} style={{ transform: `translate(${f.x! * 100}%, ${f.y! * 100}%)` }}><Bomber seat={f.seat!} face="d" /></span>;
+          return <span key={f.id} className={`pd-player pd-dead seat-${f.seat}`} style={{ transform: `translate(${f.x! * 100}%, ${f.y! * 100}%)` }}><Pawn code={avatarAt(st, f.seat!)} name={nameAt(st, f.seat!)} face="d" /></span>;
         })}
         {v.players.map((p, seat) => p.alive && (
           <span key={seat} ref={seat === me ? pawn : undefined} className={`pd-player seat-${seat}${seat === me ? ' me' : ''}${p.moving ? ' walk' : ''}${p.vest ? ' vest' : ''}${p.spared ? ' spared' : ''}${p.cursed ? ' cursed' : ''}`} style={{ transform: seat === me && playing && pred.current ? `translate(${pred.current.x * 100}%, ${pred.current.y * 100}%)` : `translate(${p.x * 100}%, ${p.y * 100}%)`, zIndex: 2 + Math.round(p.y) } as CSSProperties} aria-label={nameAt(st, seat)}>
-            <Bomber seat={seat} face={p.face} />
+            <Pawn code={avatarAt(st, seat)} name={nameAt(st, seat)} face={p.face} />
             <span className="pd-tag">{seat === me ? t('Vous', 'You') : nameAt(st, seat)}</span>
             {p.cursed && <span className="pd-skull"><Bonus k="x" /></span>}
           </span>

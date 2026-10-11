@@ -30,10 +30,12 @@ and add a new one to the kit and to that page. A white card laid on the sea
 takes the class `light` so that it stays light in the dark theme. Every drawing
 lives in `web/lib/art.tsx`, and every pictogram in `web/lib/icons.tsx`: one
 hand on a 24 unit grid (round-capped stroke in the text colour, a pale fill for
-volume), with a maritime motif wherever it stays legible (the ship's wheel
-opens a room, the compass finds a public game, the anchor joins). Add a
-pictogram there rather than drawing one in place, and never let it speak
-alone: it sits next to a word, or its button carries a name.
+volume). A pictogram keeps the shape everyone already knows: a paper plane
+sends, a plus creates, a magnifier searches, an arrow goes in or out. The
+maritime world stays in the illustrations and the background, never in the
+pictograms: one a player has to decode loses them. Add a pictogram there
+rather than drawing one in place, and never let it speak alone: it sits next
+to a word, or its button carries a name.
 
 ## Three layers
 

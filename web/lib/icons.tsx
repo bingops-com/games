@@ -1,8 +1,10 @@
 // Les pictogrammes de lab.bingo games, tous de la même main : une grille de 24, un trait
 // épais aux bouts ronds de la couleur du texte, un aplat pâle (« tint ») pour le volume, et
-// un plein (« dot ») pour le détail qui compte. La mer est dans les motifs, quand ils
-// restent lisibles : la barre à roue ouvre un salon, la boussole cherche une partie
-// publique, l'ancre rejoint, le bateau en papier porte un message.
+// un plein (« dot ») pour le détail qui compte.
+//
+// Leur dessin est celui que tout le monde connaît déjà : un avion en papier envoie, un plus
+// crée, une loupe cherche, une flèche entre ou sort. Le thème marin reste aux illustrations
+// et au décor ; un pictogramme qu'il faut deviner fait perdre le joueur.
 //
 // Un pictogramme n'est jamais seul à dire quelque chose : il accompagne un mot, ou son
 // bouton porte un aria-label.
@@ -52,27 +54,18 @@ const ICONS = {
   ),
 
   // --- Les salons
-  // Ouvrir un salon : la barre à roue.
-  wheel: (
+  // Partie publique : chercher un salon où jouer.
+  search: (
     <>
-      <circle className="tint" cx="12" cy="12" r="6" />
-      <path d="M12 2.500v4M12 17.500v4M2.500 12h4M17.500 12h4M5.300 5.300l2.800 2.800M15.900 15.900l2.800 2.800M18.700 5.300l-2.800 2.800M8.100 15.900l-2.800 2.800" />
-      <circle className="dot" cx="12" cy="12" r="1.800" />
+      <circle className="tint" cx="10.500" cy="10.500" r="6.500" />
+      <path d="M15.500 15.500l5 5" />
     </>
   ),
-  // Partie publique : la boussole, pour trouver où l'on joue.
-  compass: (
+  // Rejoindre : la porte, et la flèche qui y entre.
+  enter: (
     <>
-      <circle className="tint" cx="12" cy="12" r="9" />
-      <path className="dot" d="M16 8l-2.300 5.700L8 16l2.300-5.700z" />
-      <path d="M12 3v1.500M12 19.500V21M3 12h1.500M19.500 12H21" />
-    </>
-  ),
-  // Rejoindre : jeter l'ancre.
-  anchor: (
-    <>
-      <circle className="tint" cx="12" cy="5" r="2.300" />
-      <path d="M12 7.300V20.500M8.500 11h7M4.500 13.500c.600 4.200 3.500 7 7.500 7s6.900-2.800 7.500-7M4.500 13.500l-1.500 2M4.500 13.500l2.300 1M19.500 13.500l1.500 2M19.500 13.500l-2.300 1" />
+      <path className="tint" d="M13 4.500h4.500a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H13z" />
+      <path d="M9 8l4 4-4 4M13 12H4" />
     </>
   ),
   // Quitter : la porte, et la flèche qui en sort.
@@ -95,7 +88,7 @@ const ICONS = {
       <path d="M15.500 5.500v-1a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1" />
     </>
   ),
-  // Les règles : le livre de bord et son signet.
+  // Les règles : le livre et son signet.
   book: (
     <>
       <path className="tint" d="M5 5.500A2.500 2.500 0 0 1 7.500 3H19v15H7.500A2.500 2.500 0 0 0 5 20.500z" />
@@ -127,11 +120,11 @@ const ICONS = {
   ),
 
   // --- La discussion
-  // Envoyer : un bateau en papier.
-  boat: (
+  // Envoyer : l'avion en papier.
+  send: (
     <>
-      <path className="tint" d="M3 13.500h18l-3.500 6h-11z" />
-      <path d="M12 3.500l5.500 7.500h-11zM12 3.500V11" />
+      <path className="tint" d="M20.500 3.500l-6 17-3.500-7.500-7.500-3.500z" />
+      <path d="M20.500 3.500L11 13" />
     </>
   ),
   // Une bulle : la discussion.
@@ -193,7 +186,7 @@ const ICONS = {
       <path d="M5.700 5.700l12.600 12.600" />
     </>
   ),
-  // Signaler : hisser le pavillon.
+  // Signaler : le drapeau.
   flag: (
     <>
       <path className="tint" d="M6 4.500h12l-3 4 3 4H6z" />

@@ -118,8 +118,8 @@ export default function Home() {
             )}
           </div>
           <div className="start-go">
-            <button className="btn primary big" disabled={!ready || busy} onClick={create}><Ic name="wheel" />{t('Créer un salon', 'Create a room')}</button>
-            <button className="btn quiet big" disabled={!ready || busy} onClick={() => setQuick(true)} title={t('Les salons publics qui attendent des joueurs, par jeu', 'The public rooms waiting for players, by game')}><Ic name="compass" />{t('Partie publique', 'Public game')}</button>
+            <button className="btn primary big" disabled={!ready || busy} onClick={create}><Ic name="plus" />{t('Créer un salon', 'Create a room')}</button>
+            <button className="btn quiet big" disabled={!ready || busy} onClick={() => setQuick(true)} title={t('Les salons publics qui attendent des joueurs, par jeu', 'The public rooms waiting for players, by game')}><Ic name="search" />{t('Partie publique', 'Public game')}</button>
           </div>
           <p className="start-pick">{t('Premier jeu', 'First game')} : <b>{picked.name}</b></p>
           <p className="start-or"><span>{t('ou', 'or')}</span></p>
@@ -127,7 +127,7 @@ export default function Home() {
             <label htmlFor="code">{t('Rejoindre avec un code', 'Join with a code')}</label>
             <div className="join-row">
               <input id="code" className="code-field" value={code} onChange={(e) => setCode(cleanCode(e.target.value))} placeholder="ABCD" autoComplete="off" autoCapitalize="characters" spellCheck={false} />
-              <button className="btn quiet" disabled={!ready || busy}><Ic name="anchor" />{t('Rejoindre', 'Join')}</button>
+              <button className="btn quiet" disabled={!ready || busy}><Ic name="enter" />{t('Rejoindre', 'Join')}</button>
             </div>
           </form>
         </div>

@@ -100,7 +100,7 @@ export default function Chat({ lines, members, you, send }: { lines: ChatLine[];
       <form className="chat-form" onSubmit={say}>
         <input value={text} onChange={(e) => setText(e.target.value)} maxLength={MAX} placeholder={t('Écrire aux autres…', 'Write to the others…')} aria-label={t('Votre message', 'Your message')} autoComplete="off" enterKeyHint="send" />
         {text.length > MAX - 40 && <span className="chat-count" aria-hidden="true">{MAX - text.length}</span>}
-        <button className="btn primary icon" disabled={!text.trim()} aria-label={t('Envoyer', 'Send')}><Ic name="boat" /></button>
+        <button className="btn primary icon" disabled={!text.trim()} aria-label={t('Envoyer', 'Send')}><Ic name="send" /></button>
       </form>
     </section>
   );

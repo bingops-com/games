@@ -179,7 +179,7 @@ function Invites() {
         <Dialog key={`${inv.from}/${inv.code}`} title={t(`${inv.from} vous invite`, `${inv.from} invites you`)} onClose={() => App.ignoreInvite(inv)} className="ask-dialog">
           <Avatar code={inv.avatar} name={inv.from} className="chip-sea" />
           <p>{t(`${inv.from} joue dans le salon ${inv.code} et vous propose de le rejoindre.`, `${inv.from} is playing in room ${inv.code} and asks you to join.`)}</p>
-          <button className="btn primary" autoFocus onClick={() => join(inv)}><Ic name="anchor" />{t('Rejoindre le salon', 'Join the room')}</button>
+          <button className="btn primary" autoFocus onClick={() => join(inv)}><Ic name="enter" />{t('Rejoindre le salon', 'Join the room')}</button>
           <button className="btn quiet" onClick={() => App.ignoreInvite(inv)}>{t('Plus tard', 'Later')}</button>
         </Dialog>
       );
@@ -249,7 +249,7 @@ function Resume() {
         <strong>{table.code}</strong>
       </p>
       <button className="dots" onClick={() => App.remember(null)} aria-label={t(`Ne plus proposer le salon ${table.code}`, `Stop offering room ${table.code}`)} title={t('Ne plus le proposer', 'Stop offering it')}><Ic name="close" /></button>
-      <Link className="btn white small" href={`/t/?code=${table.code}`} aria-label={t(`Retourner au salon ${table.code}`, `Back to room ${table.code}`)}><Ic name="anchor" />{t('Y retourner', 'Go back')}</Link>
+      <Link className="btn white small" href={`/t/?code=${table.code}`} aria-label={t(`Retourner au salon ${table.code}`, `Back to room ${table.code}`)}><Ic name="enter" />{t('Y retourner', 'Go back')}</Link>
     </div>
   );
 }

@@ -311,9 +311,14 @@
   background: var(--sea-deep);
 }
 /* Dans un salon le chat s'efface : le compte reste au pied de la bande. */
+/* Le chat, quand il est là, pousse le compte au pied de la bande ; quand il n'y est pas
+   (fenêtre basse, salon à retrouver), le compte s'y pousse lui-même. */
 .side.in-room .who,
 .side .mascot + .who {
   margin-top: 0;
+}
+.side:has(.resume) .mascot + .who {
+  margin-top: auto;
 }
 .who-links {
   display: flex;
@@ -1833,6 +1838,9 @@ img.art {
 @media (max-height: 44rem) {
   .side .mascot {
     display: none;
+  }
+  .side:not(.in-room) .mascot + .who {
+    margin-top: auto;
   }
   /* Fenêtre basse : l'accueil se resserre pour tenir sans défiler. */
   .nudge {

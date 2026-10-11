@@ -205,6 +205,18 @@ const scenarios = {
     await host.locator('.pd-fire').first().waitFor({ timeout: 5000 });
   },
 
+  // Le compte reste au pied de la bande sur toutes les pages, même dans une fenêtre basse.
+  async pied() {
+    const p = await player({ width: 1280, height: 620, account: `e2e_${tag()}` });
+    for (const path of ['/', '/amis/', '/objectifs/', '/magasin/', '/compte/']) {
+      await p.goto(BASE + path);
+      await p.locator('.who-name').waitFor();
+      await p.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      const gap = await p.locator('.who').evaluate((e) => Math.abs(e.getBoundingClientRect().bottom - innerHeight));
+      check(gap < 2, `sur ${path}, le compte est à ${Math.round(gap)} px du pied de la bande`);
+    }
+  },
+
   // Sur un téléphone : l'accueil et un salon tiennent dans la largeur de l'écran.
   async telephone() {
     const size = { width: 390, height: 800 };

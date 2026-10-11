@@ -2738,74 +2738,62 @@ button.crew-chip:hover,
   transition: transform 0.07s linear;
   z-index: 2;
 }
-.pd-bomber {
+/* Le pion : l'avatar du joueur sur deux pieds et sur un socle de sa couleur. */
+.pd-pawn {
   position: absolute;
-  left: 4%;
-  bottom: 2%;
-  width: 92%;
-  height: auto;
-  overflow: visible;
+  inset: 0;
+  display: block;
 }
-.bm-shadow {
-  fill: rgb(4 16 66 / 0.45);
-}
-.bm-foot {
-  fill: var(--navy);
-  stroke: #fff;
-  stroke-width: 1.5;
-}
-.bm-suit {
-  fill: var(--seat);
-  stroke: #fff;
-  stroke-width: 2;
-}
-.bm-mark {
-  fill: #fff;
-}
-.seat-1 .bm-mark {
-  fill: var(--navy);
-}
-.bm-stem {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-.bm-head {
-  fill: #fff;
-}
-.bm-visor {
-  fill: #cfdcfa;
-}
-.bm-eye {
-  fill: var(--navy);
-}
-/* Il regarde où il va : de profil, le visage glisse sur le côté ; de dos, il n'y en a pas. */
-.bm-face {
-  transition: translate 0.12s;
-}
-.face-l .bm-face {
-  translate: -4px 0;
-}
-.face-r .bm-face {
-  translate: 4px 0;
-}
-.face-u .bm-mark {
-  display: none;
-}
-/* Il respire à l'arrêt, et ses pieds marchent quand il avance. */
-.bm-all {
-  transform-box: fill-box;
+.pd-pawn .avatar {
+  position: absolute;
+  left: 9%;
+  bottom: 13%;
+  width: 82%;
   transform-origin: 50% 100%;
   animation: pd-breathe 1.6s ease-in-out infinite;
+  transition: translate 0.12s, rotate 0.12s;
 }
-.walk .bm-all {
+.pw-base {
+  position: absolute;
+  inset: 70% 10% 0;
+  border-radius: 50%;
+  background: var(--seat);
+  box-shadow: 0 0 0 2px var(--navy);
+}
+.pw-foot {
+  position: absolute;
+  bottom: 9%;
+  width: 22%;
+  height: 15%;
+  border: 1.5px solid #fff;
+  border-radius: 40%;
+  background: var(--navy);
+}
+.pw-foot-l {
+  left: 25%;
+}
+.pw-foot-r {
+  right: 25%;
+}
+/* Il penche du côté où il va. */
+.face-l .avatar {
+  translate: -5% 0;
+  rotate: -5deg;
+}
+.face-r .avatar {
+  translate: 5% 0;
+  rotate: 5deg;
+}
+.face-u .avatar {
+  translate: 0 -3%;
+}
+.walk .pd-pawn .avatar {
   animation: pd-bob 0.28s ease-in-out infinite;
 }
-.walk .bm-foot-l {
+.walk .pw-foot-l {
   animation: pd-foot 0.28s linear infinite;
 }
-.walk .bm-foot-r {
+.walk .pw-foot-r {
   animation: pd-foot 0.28s linear infinite reverse;
 }
 @keyframes pd-breathe {
@@ -2815,7 +2803,7 @@ button.crew-chip:hover,
 }
 @keyframes pd-bob {
   50% {
-    translate: 0 -2px;
+    translate: 0 -5%;
   }
 }
 @keyframes pd-foot {
@@ -2824,10 +2812,10 @@ button.crew-chip:hover,
     translate: 0 0;
   }
   25% {
-    translate: 0 -3px;
+    translate: 0 -30%;
   }
   75% {
-    translate: 0 1px;
+    translate: 0 10%;
   }
 }
 /* Votre pion est déplacé image par image par la page : il n'a pas à lisser ses sauts. */
@@ -2835,14 +2823,12 @@ button.crew-chip:hover,
   transition: none;
 }
 /* Menthe : « celui-ci », votre pièce. Un anneau sous ses pieds, et son nom sur menthe. */
-.pd-player.me .bm-shadow {
-  fill: none;
-  stroke: var(--mint);
-  stroke-width: 3;
+.pd-player.me .pw-base {
+  box-shadow: 0 0 0 2px var(--navy), 0 0 0 5px var(--mint);
 }
 .pd-tag {
   position: absolute;
-  bottom: 104%;
+  bottom: 118%;
   left: 50%;
   max-width: 260%;
   padding: 0.05em 0.5em;
@@ -2875,7 +2861,7 @@ button.crew-chip:hover,
     opacity: 0.7;
   }
 }
-.pd-player.spared .pd-bomber {
+.pd-player.spared .pd-pawn {
   animation: pd-blink 0.16s steps(2) infinite;
 }
 @keyframes pd-blink {
@@ -2902,7 +2888,7 @@ button.crew-chip:hover,
   width: 74%;
   fill: currentColor;
 }
-.pd-player.cursed .bm-all {
+.pd-player.cursed .pd-pawn .avatar {
   animation-duration: 0.7s;
 }
 /* Éliminé : il s'envole en tournant. */
@@ -2911,10 +2897,10 @@ button.crew-chip:hover,
   pointer-events: none;
   transition: none;
 }
-.pd-dead .pd-bomber {
+.pd-dead .pd-pawn {
   animation: pd-dead 0.95s cubic-bezier(0.3, 0, 0.4, 1) forwards;
 }
-.pd-dead .bm-all {
+.pd-dead .pd-pawn .avatar {
   animation: none;
 }
 @keyframes pd-dead {

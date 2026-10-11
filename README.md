@@ -355,20 +355,21 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   attendant que d'autres arrivent. Dans la salle d'attente, l'hôte règle les
   places du salon, d'un moins et d'un plus : au-delà, le salon est complet et n'est plus
   listé.
-- **Bombermat** : des poseurs de bombes à la couleur et à la forme de chaque
-  joueur, qui regardent où ils vont et marchent ; des bombes qui battent de
+- **Bombermat** : le pion de chaque joueur est son avatar, posé sur un socle à
+  sa couleur, qui penche du côté où il va et marche ; des bombes qui battent de
   plus en plus vite, des flammes en croix, des caisses qui volent en éclats,
   des bonus qui sortent des caisses et dont le nom s'envole quand on les
   ramasse. Huit bonus, comme dans Bomberman : bombe, feu, patins, coup de
   pied, bombes perçantes, gilet, plein feu, et la tête de mort qui ralentit.
 - **Pictogrammes** : un seul jeu, dessiné pour l'application
   (`web/lib/icons.tsx`, composant `Ic`) : grille de 24, trait aux bouts ronds
-  de la couleur du texte, aplat pâle pour le volume. La mer est dans les
-  motifs quand ils restent lisibles : la barre à roue ouvre un salon, la
-  boussole cherche une partie publique, l'ancre rejoint, le bateau en papier
-  envoie un message, le livre de bord porte les règles, le pavillon signale.
-  Ils accompagnent toujours un mot, ou leur bouton porte un nom. La page
-  `/uikit/` les montre tous.
+  de la couleur du texte, aplat pâle pour le volume. Leur dessin est celui que
+  tout le monde connaît déjà (un avion en papier envoie, un plus crée, une
+  loupe cherche, une flèche entre ou sort) : le thème marin reste aux
+  illustrations et au décor. Ils accompagnent toujours un mot, ou leur bouton
+  porte un nom. La page `/uikit/` les montre tous.
+- **Arrêter la partie** se confirme dans une fenêtre au milieu de l'écran :
+  la partie ne compterait pour personne.
 - **Sons** : de petites notes fabriquées par le navigateur (`web/lib/sound.ts`,
   aucun fichier chargé) disent ce qui vient de se passer : c'est à vous, un
   message, un joueur qui arrive, une carte posée ou piochée, une bombe, une

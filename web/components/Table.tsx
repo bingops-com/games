@@ -331,6 +331,8 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
   const t = useT();
   const { full } = useApp();
   const [rules, setRules] = useState(false);
+  // Arrêter la partie se confirme : elle ne compterait pour personne.
+  const [stopping, setStopping] = useState(false);
   const [reported, setReported] = useState<Member | null>(null);
   const st = link.st!;
   const Stage = STAGES[game.id];
@@ -373,7 +375,7 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
           {st.seat < 0 && playing && <span>{t('Vous regardez : vous jouerez la prochaine partie.', 'You are watching: you will play the next game.')}</span>}
           <span className="board-tools">
             {playing && <button className="btn onsea small" onClick={() => setRules(true)}><Ic name="book" />{t('Règles', 'Rules')}</button>}
-            {playing && host && st.phase === 'playing' && <button className="btn onsea small" onClick={() => link.send({ t: 'lobby' })}><Ic name="stop" />{t('Arrêter la partie', 'Stop the game')}</button>}
+            {playing && host && st.phase === 'playing' && <button className="btn onsea small" onClick={() => setStopping(true)}><Ic name="stop" />{t('Arrêter la partie', 'Stop the game')}</button>}
             <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}><Ic name={full ? 'shrink' : 'expand'} />{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
           </span>
         </div>
@@ -397,6 +399,13 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
         )}
       </section>
       {rules && <Rules game={game} close={() => setRules(false)} />}
+      {stopping && st.phase === 'playing' && (
+        <Dialog title={t('Arrêter la partie ?', 'Stop the game?')} onClose={() => setStopping(false)}>
+          <p>{t(`La partie de ${game.name} s’arrête pour tout le monde et ne compte pour personne. Le salon revient au choix du jeu.`, `The game of ${game.name} stops for everyone and counts for nobody. The room goes back to choosing a game.`)}</p>
+          <button className="btn primary" onClick={() => { link.send({ t: 'lobby' }); setStopping(false); }}><Ic name="stop" />{t('Arrêter la partie', 'Stop the game')}</button>
+          <button className="btn quiet" autoFocus onClick={() => setStopping(false)}>{t('Continuer à jouer', 'Keep playing')}</button>
+        </Dialog>
+      )}
       {reported && <ReportDialog st={st} member={reported} close={() => setReported(null)} />}
     </div>
   );
