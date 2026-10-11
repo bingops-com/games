@@ -68,42 +68,43 @@ export function ReportDialog({ st, member, close }: { st: TableState; member: Me
   );
 }
 
-// Ce qu'on peut faire d'un joueur : un bouton à trois points, qui déplie les actions sous
-// sa ligne. L'hôte peut lui passer la main ou le retirer ; tout le monde peut le masquer,
-// le signaler, et le bloquer s'il a un compte.
-export function MemberMenu({ st, m, send, report }: { st: TableState; m: Member; send: TableLink['send']; report: (m: Member) => void }) {
+// Ce qu'on peut faire d'un joueur : l'hôte peut lui passer la main ou le retirer ; tout le
+// monde peut le masquer, le signaler, et le bloquer s'il a un compte.
+export function MemberActions({ st, m, send, report, done }: { st: TableState; m: Member; send: TableLink['send']; report: (m: Member) => void; done: () => void }) {
   const { account, muted } = useApp();
   const t = useT();
-  const [open, setOpen] = useState(false);
   const [sure, setSure] = useState(false);
-  if (m.id === st.you) return null;
   const host = st.host === st.you;
   const isMuted = muted.includes(m.id);
   const blocked = m.account && !!account?.blocked.includes(m.name);
-  const done = () => {
-    setOpen(false);
-    setSure(false);
-  };
   return (
     <>
-      <button className="dots" aria-expanded={open} aria-label={t(`Actions pour ${m.name}`, `Actions for ${m.name}`)} onClick={() => (open ? done() : setOpen(true))}>
+      {host && <button className="pill ghost" onClick={() => { send({ t: 'host', id: m.id }); done(); }}>{t('Nommer hôte', 'Make host')}</button>}
+      {host && (sure
+        ? <button className="pill" onClick={() => { send({ t: 'kick', id: m.id }); done(); }}>{t('Confirmer le retrait', 'Confirm removal')}</button>
+        : <button className="pill ghost" onClick={() => setSure(true)}>{t('Retirer du salon', 'Remove from room')}</button>)}
+      <button className="pill ghost" onClick={() => { App.toggleMute(m.id); done(); }}>{isMuted ? t('Réafficher ses messages', 'Show their messages') : t('Masquer ses messages', 'Hide their messages')}</button>
+      {account && m.account && (
+        <button className="pill ghost" onClick={() => { App.block(blocked ? 'remove' : 'add', m.name).then(() => App.toast(blocked ? t(`${m.name} débloqué`, `${m.name} unblocked`) : t(`${m.name} bloqué`, `${m.name} blocked`)), (err: Error) => App.toast(err.message)); done(); }}>
+          {blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}
+        </button>
+      )}
+      <button className="pill ghost" onClick={() => { report(m); done(); }}>{t('Signaler', 'Report')}</button>
+    </>
+  );
+}
+
+// Dans une liste, ces actions se déplient sous la ligne du joueur, d'un bouton à trois points.
+export function MemberMenu({ st, m, send, report }: { st: TableState; m: Member; send: TableLink['send']; report: (m: Member) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  if (m.id === st.you) return null;
+  return (
+    <>
+      <button className="dots" aria-expanded={open} aria-label={t(`Actions pour ${m.name}`, `Actions for ${m.name}`)} onClick={() => setOpen(!open)}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
       </button>
-      {open && (
-        <div className="member-menu">
-          {host && <button className="pill ghost" onClick={() => { send({ t: 'host', id: m.id }); done(); }}>{t('Nommer hôte', 'Make host')}</button>}
-          {host && (sure
-            ? <button className="pill" onClick={() => { send({ t: 'kick', id: m.id }); done(); }}>{t('Confirmer le retrait', 'Confirm removal')}</button>
-            : <button className="pill ghost" onClick={() => setSure(true)}>{t('Retirer du salon', 'Remove from room')}</button>)}
-          <button className="pill ghost" onClick={() => { App.toggleMute(m.id); done(); }}>{isMuted ? t('Réafficher ses messages', 'Show their messages') : t('Masquer ses messages', 'Hide their messages')}</button>
-          {account && m.account && (
-            <button className="pill ghost" onClick={() => { App.block(blocked ? 'remove' : 'add', m.name).then(() => App.toast(blocked ? t(`${m.name} débloqué`, `${m.name} unblocked`) : t(`${m.name} bloqué`, `${m.name} blocked`)), (err: Error) => App.toast(err.message)); done(); }}>
-              {blocked ? t('Débloquer', 'Unblock') : t('Bloquer', 'Block')}
-            </button>
-          )}
-          <button className="pill ghost" onClick={() => { report(m); done(); }}>{t('Signaler', 'Report')}</button>
-        </div>
-      )}
+      {open && <div className="member-menu"><MemberActions st={st} m={m} send={send} report={report} done={() => setOpen(false)} /></div>}
     </>
   );
 }

@@ -610,6 +610,37 @@ input[type='range'] {
   gap: 0.35rem;
   padding: 0.4rem 0 0.2rem;
 }
+/* Serrée : une seule ligne par joueur, le mot sur lui à la suite de son nom. Pour une
+   colonne étroite où l'on veut voir beaucoup de monde. */
+.tight > .member {
+  --member-avatar: 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.45rem;
+  padding: 0.2rem 0;
+}
+.tight > .member > :is(a, b) {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.9375rem;
+}
+.tight > .member > small {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tight > .member > small:empty {
+  display: block;
+}
+.tight > .member > .member-menu {
+  flex-basis: 100%;
+}
+.tight > .member.me > small::before {
+  margin-right: 0.3rem;
+}
 /* Trois points : ouvre les actions sous la ligne. */
 .dots {
   display: grid;

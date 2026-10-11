@@ -124,7 +124,7 @@ const scenarios = {
     await host.getByRole('button', { name: /Partie publique/ }).click();
     await host.locator('.quick-game', { hasText: 'BoomParty' }).getByRole('button', { name: /Ouvrir un salon/ }).click();
     await host.locator('.lobby').waitFor();
-    const name = await host.locator('.member.me > :is(a, b)').first().innerText();
+    const name = await host.locator('.crew-chip.me b').innerText();
     for (let seats = Number(await host.locator('.lobby-limit b').innerText()); seats > 2; seats--) {
       await host.locator('.lobby-limit .btn').first().click();
       await host.locator('.lobby-limit b', { hasText: new RegExp(`^${seats - 1}$`) }).waitFor();

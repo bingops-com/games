@@ -9,7 +9,7 @@ import { App, cleanCode, profilePath, useApp, useT } from '@/lib/app';
 import { GameCover } from '@/lib/art';
 import { Avatar } from '@/lib/avatar';
 import { Name } from '@/lib/shop';
-import { MemberMenu, ReportDialog, RoomChat, Settings } from './RoomExtras';
+import { MemberActions, MemberMenu, ReportDialog, RoomChat, Settings } from './RoomExtras';
 import { Bar, Dialog, Ic } from './ui';
 import { howOf, nextObjective, titleOf } from '@/lib/objectives';
 import type { T } from '@/lib/i18n';
@@ -54,30 +54,69 @@ function Wins({ n }: { n: number }) {
   );
 }
 
-// Qui est dans le salon : un joueur par ligne, puis les places qu'il reste à remplir.
-function Members({ st, send, report, free = 0 }: { st: TableState; send: TableLink['send']; report: (m: Member) => void; free?: number }) {
+const statusOf = (st: TableState, m: Member, t: T) => [m.id === st.you && t('vous', 'you'), m.id === st.host && t('hôte', 'host'), st.phase !== 'lobby' && m.seat < 0 && t('regarde', 'watching'), !m.on && t('déconnecté', 'disconnected')].filter(Boolean).join(', ');
+
+// Qui est dans le salon, dans la bande : un joueur par ligne, serrée, pour en montrer
+// beaucoup ; ceux qui regardent après ceux qui jouent.
+function Members({ st, send, report }: { st: TableState; send: TableLink['send']; report: (m: Member) => void }) {
   const t = useT();
   const playing = st.phase !== 'lobby';
-  // En partie, les joueurs dans l'ordre des places ; ceux qui regardent ensuite.
   const members = playing ? [...st.members].sort((a, b) => (a.seat < 0 ? 99 : a.seat) - (b.seat < 0 ? 99 : b.seat)) : st.members;
   return (
-    <ul className="members">
+    <ul className="members tight">
       {members.map((m) => (
         <li key={m.id} className={`member${m.on ? '' : ' off'}${m.id === st.you ? ' me' : ''}`}>
           <Avatar code={m.avatar} name={m.name} />
           {m.account ? <Link href={profilePath(m.name)} target="_blank"><Name name={m.name} fx={m.fx} /></Link> : <b>{m.name}</b>}
-          <small>{[m.id === st.you && t('vous', 'you'), m.id === st.host && t('hôte', 'host'), playing && m.seat < 0 && t('regarde', 'watching'), !m.on && t('déconnecté', 'disconnected')].filter(Boolean).join(', ')}</small>
+          <small>{statusOf(st, m, t)}</small>
           <Wins n={m.wins} />
           <MemberMenu st={st} m={m} send={send} report={report} />
         </li>
       ))}
-      {Array.from({ length: free }, (_, i) => (
-        <li key={`free-${i}`} className="member free">
-          <span className="disc" aria-hidden="true" />
-          <b>{t('Place libre', 'Free seat')}</b>
-        </li>
-      ))}
     </ul>
+  );
+}
+
+// Dans la salle d'attente : l'équipage en vignettes, quatre par rangée, pour tenir à douze.
+// Une vignette se touche pour ouvrir, dessous, ce qu'on peut faire du joueur. Les places
+// qu'il reste à remplir pour lancer le jeu suivent, en creux.
+function Crew({ st, send, report, free }: { st: TableState; send: TableLink['send']; report: (m: Member) => void; free: number }) {
+  const t = useT();
+  const [picked, setPicked] = useState<string | null>(null);
+  const chosen = st.members.find((m) => m.id === picked && m.id !== st.you);
+  return (
+    <div className="crew">
+      <ul className="crew-grid">
+        {st.members.map((m) => {
+          const inside = (
+            <>
+              <Avatar code={m.avatar} name={m.name} />
+              <b><Name name={m.name} fx={m.fx} /></b>
+              <small>{statusOf(st, m, t)}</small>
+              {m.wins > 0 && <Wins n={m.wins} />}
+            </>
+          );
+          const cls = `crew-chip${m.on ? '' : ' off'}${m.id === st.you ? ' me' : ''}${chosen?.id === m.id ? ' on' : ''}`;
+          return (
+            <li key={m.id}>
+              {m.id === st.you
+                ? <div className={cls}>{inside}</div>
+                : <button className={cls} aria-expanded={chosen?.id === m.id} title={t(`Actions pour ${m.name}`, `Actions for ${m.name}`)} onClick={() => setPicked(chosen?.id === m.id ? null : m.id)}>{inside}</button>}
+            </li>
+          );
+        })}
+        {Array.from({ length: free }, (_, i) => (
+          <li key={`free-${i}`}><div className="crew-chip free"><span className="disc" aria-hidden="true" /><b>{t('Place libre', 'Free seat')}</b></div></li>
+        ))}
+      </ul>
+      {chosen && (
+        <div className="member-menu crew-actions">
+          <b>{chosen.name}</b>
+          {chosen.account && <Link className="pill ghost" href={profilePath(chosen.name)} target="_blank">{t('Voir son profil', 'See their profile')}</Link>}
+          <MemberActions st={st} m={chosen} send={send} report={report} done={() => setPicked(null)} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -169,29 +208,32 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
       </section>
 
       <section className="lobby-crew veil" aria-labelledby="lobby-crew-title">
-        <h2 id="lobby-crew-title">{n === 1 ? t('Personne d’autre pour l’instant', 'Nobody else yet') : t(`${n} joueurs dans le salon`, `${n} players in the room`)}</h2>
-        <Members st={st} send={send} report={report} free={missing} />
-        {st.played > 0 && <p className="lobby-played">{t(`${st.played} partie${st.played > 1 ? 's' : ''} jouée${st.played > 1 ? 's' : ''} dans ce salon`, `${st.played} game${st.played === 1 ? '' : 's'} played in this room`)}</p>}
+        <h2 id="lobby-crew-title">
+          {n === 1 ? t('Personne d’autre pour l’instant', 'Nobody else yet') : t(`${n} joueurs dans le salon`, `${n} players in the room`)}
+          <small>{t(`${seats} places`, `${seats} seats`)}</small>
+        </h2>
+        <Crew st={st} send={send} report={report} free={missing} />
         <div className="lobby-invite">
           <div className="invite-row">
             <span className="invite-link">{url.replace(/^https?:\/\//, '')}</span>
             <button className="btn white small" onClick={() => App.copy(url, t('Lien d’invitation copié', 'Invitation link copied'))}><Ic name="copy" />{t('Copier', 'Copy')}</button>
           </div>
           {host ? (
-            <label className="check">
-              <input type="checkbox" checked={st.public} onChange={(e) => send({ t: 'public', a: e.target.checked })} />
-              <span>{t('Salon public : n’importe qui peut le rejoindre depuis l’accueil.', 'Public room: anyone can join it from the home page.')}</span>
-            </label>
-          ) : st.public && <p>{t('Ce salon est public.', 'This room is public.')}</p>}
-          {host ? (
-            <div className="lobby-limit" role="group" aria-label={t('Places dans le salon', 'Seats in the room')}>
-              <span>{t('Places', 'Seats')}</span>
-              <button className="btn onsea small icon" disabled={seats <= seatsMin} onClick={() => send({ t: 'limit', a: seats - 1 })} aria-label={t('Une place de moins', 'One seat fewer')}>−</button>
-              <b aria-live="polite">{seats}</b>
-              <button className="btn onsea small icon" disabled={seats >= seatsMax} onClick={() => send({ t: 'limit', a: seats + 1 })} aria-label={t('Une place de plus', 'One more seat')}>+</button>
-              <small>{seats >= seatsMax ? t('le maximum du jeu', 'the most the game takes') : t(`sur ${seatsMax} possibles`, `out of ${seatsMax} possible`)}</small>
+            <div className="lobby-host">
+              <label className="check" title={t('N’importe qui peut rejoindre un salon public depuis « Partie publique », sur l’accueil.', 'Anyone can join a public room from "Public game", on the home page.')}>
+                <input type="checkbox" checked={st.public} onChange={(e) => send({ t: 'public', a: e.target.checked })} />
+                <span>{t('Salon public', 'Public room')}</span>
+              </label>
+              <div className="lobby-limit" role="group" aria-label={t('Places dans le salon', 'Seats in the room')} title={t(`De ${seatsMin} à ${seatsMax} places pour ce jeu`, `From ${seatsMin} to ${seatsMax} seats for this game`)}>
+                <span>{t('Places', 'Seats')}</span>
+                <button className="btn onsea small icon" disabled={seats <= seatsMin} onClick={() => send({ t: 'limit', a: seats - 1 })} aria-label={t('Une place de moins', 'One seat fewer')}>−</button>
+                <b aria-live="polite">{seats}</b>
+                <button className="btn onsea small icon" disabled={seats >= seatsMax} onClick={() => send({ t: 'limit', a: seats + 1 })} aria-label={t('Une place de plus', 'One more seat')}>+</button>
+              </div>
             </div>
-          ) : st.limit > 0 && <p>{t(`${n} joueur${n > 1 ? 's' : ''} sur ${st.limit} places.`, `${n} player${n === 1 ? '' : 's'} out of ${st.limit} seats.`)}</p>}
+          ) : (
+            <p className="lobby-host">{st.public ? t('Salon public', 'Public room') : t('Salon privé : on y entre avec le lien', 'Private room: you get in with the link')}{st.played > 0 && t(`, ${st.played} partie${st.played > 1 ? 's' : ''} jouée${st.played > 1 ? 's' : ''}`, `, ${st.played} game${st.played === 1 ? '' : 's'} played`)}</p>
+          )}
         </div>
         <RoomChat link={link} st={st} />
       </section>
