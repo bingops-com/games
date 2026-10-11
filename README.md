@@ -389,6 +389,16 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   gagner des crédits et l'effet du pseudo ; sur la mer, les quatre articles du
   jour sur leur présentoir avec le compte à rebours, puis toute la collection,
   pour voir ce qui est à soi et ce qui reviendra un autre jour.
+- **Choix du jeu** : dans la salle d'attente, l'hôte décide qui choisit, « Je
+  choisis » ou « Au vote ». Tout le monde peut donner sa voix à un jeu (un
+  second clic la reprend) ; les voix s'affichent sur les tuiles. Au vote, le jeu
+  qui en a le plus est choisi, et une égalité garde le jeu déjà choisi. Quand
+  l'hôte choisit, les voix lui disent ce que les autres préfèrent.
+- **Ono, le tour** : le joueur dont c'est le tour grandit, un anneau de menthe
+  se vide autour de lui avec son temps, les autres s'effacent, une flèche part
+  du tas vers sa place ; « À vous ! » s'annonce en grand et votre main
+  s'éclaire. Au début, les cartes se distribuent une à une depuis la pioche,
+  puis la première carte du tas se retourne.
 - **Ono** : la main est en éventail au bord de la table ; une carte posée
   part de son joueur, se retourne en vol et reste de travers sur le tas ; une
   carte spéciale s'annonce en grand au milieu (« +2 », « passe », le sens qui

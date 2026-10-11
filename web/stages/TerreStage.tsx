@@ -214,6 +214,56 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [v.top.id, v.color]);
   const tilt = (id: number) => ({ '--rot': `${((id * 37) % 23) - 11}deg`, '--dx': `${((id * 17) % 13) - 6}%`, '--dy': `${((id * 29) % 9) - 4}%` }) as CSSProperties;
+  // Au début de la partie, les cartes se distribuent : une par joueur, sept tours de table,
+  // de la pioche vers chaque place. La main et les éventails se remplissent au même rythme,
+  // et la première carte du tas se retourne à la fin. Rien de tel si l'on arrive en cours.
+  const DEALT = 7;
+  const gap = Math.min(70, 1900 / (DEALT * n));
+  const dealTime = DEALT * n * gap;
+  const [dealing, setDealing] = useState(v.last === null && v.winner < 0);
+  useEffect(() => {
+    if (!dealing) return;
+    const tick = setInterval(() => sound('draw'), 130);
+    const done = setTimeout(() => setDealing(false), dealTime + 700);
+    const quiet = setTimeout(() => clearInterval(tick), dealTime);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(done);
+      clearTimeout(quiet);
+    };
+    // Une seule fois, à l'arrivée sur la table.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const dealAt = (seat: number, k: number) => `${Math.round((k * n + seat) * gap)}ms`;
+
+  // À qui le tour : une flèche part du tas vers sa place. La table n'est pas carrée ; son
+  // angle se calcule sur ses vraies proportions.
+  const tableBox = useRef<HTMLDivElement>(null);
+  const [shape, setShape] = useState(2);
+  useEffect(() => {
+    const el = tableBox.current;
+    if (!el) return;
+    const read = () => el.clientHeight > 0 && setShape(el.clientWidth / el.clientHeight);
+    read();
+    const watch = new ResizeObserver(read);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const toward = place(v.turn);
+  const pointer = {
+    '--x': `${50 + (toward.x - 50) * 0.5}%`,
+    '--y': `${52 + (toward.y - 52) * 0.5}%`,
+    '--a': `${(Math.atan2(toward.y - 52, (toward.x - 50) * shape) * 180) / Math.PI}deg`,
+  } as CSSProperties;
+  // « À vous ! » : annoncé en grand, un instant, chaque fois que le tour vous revient.
+  const [yours, setYours] = useState(0);
+  useEffect(() => {
+    if (!mine || dealing) return;
+    setYours((k) => k + 1);
+    const done = setTimeout(() => setYours(0), 1300);
+    return () => clearTimeout(done);
+  }, [mine, dealing]);
+
   // Qui vient de recevoir des cartes : sa place tressaute le temps de l'effet.
   const hit = (seat: number) => (fx.badges.some((b) => b.seat === seat && b.text.startsWith('+')) ? ' hit' : '');
   const mustDraw = mine && v.drawn < 0 && v.playable.length === 0;
@@ -265,18 +315,19 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
   return (
     <div className="terre">
       {guide}
-      <div className="ono-table">
+      <div className={`ono-table${dealing ? ' dealing' : ''}${v.winner < 0 && !dealing ? ' has-turn' : ''}`} ref={tableBox} style={{ '--deal-end': `${Math.round(dealTime)}ms` } as CSSProperties}>
       <div className={`ono-top glow-${v.color}`} aria-hidden="true" />
+      {v.winner < 0 && !dealing && <span className="ono-pointer" style={pointer} aria-hidden="true"><i /><i /><i /></span>}
       <ul className="rivals">
         {others.map((seat) => {
           const shown = Math.min(v.counts[seat], 7);
-          const turn = v.turn === seat && v.winner < 0;
+          const turn = v.turn === seat && v.winner < 0 && !dealing;
           return (
-            <li key={seat} className={`rival${turn ? ' turn' : ''}${v.out[seat] ? ' out' : ''}${hit(seat)}`} style={at(seat)}>
+            <li key={seat} className={`rival${turn ? ' turn' : ''}${v.out[seat] ? ' out' : ''}${hit(seat)}`} style={at(seat, turn ? { '--share': share } : undefined)}>
               <span className="rival-who">
                 <Avatar code={avatarAt(st, seat)} name={nameAt(st, seat)} />
                 {/* Sa main, dos des cartes : jusqu'à sept montrées, le compte est écrit dessous. */}
-                {!v.out[seat] && <span className="rival-fan" aria-hidden="true">{Array.from({ length: shown }, (_, k) => <i key={k} style={{ '--k': k - (shown - 1) / 2 } as CSSProperties} />)}</span>}
+                {!v.out[seat] && <span className="rival-fan" aria-hidden="true">{Array.from({ length: shown }, (_, k) => <i key={k} style={{ '--k': k - (shown - 1) / 2, animationDelay: dealing ? dealAt(seat, k) : undefined } as CSSProperties} />)}</span>}
               </span>
               <span className="rival-name"><Name name={nameAt(st, seat)} fx={fxAt(st, seat)} /></span>
               <span className="rival-count" key={v.counts[seat]}>{v.out[seat] ? t('parti', 'left') : t(`${v.counts[seat]} carte${v.counts[seat] > 1 ? 's' : ''}`, `${v.counts[seat]} card${v.counts[seat] === 1 ? '' : 's'}`)}</span>
@@ -287,7 +338,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
         })}
         {/* Votre place, au bord de la table, juste au-dessus de votre main. */}
         {me >= 0 && (
-          <li className={`rival me${mine ? ' turn' : ''}${hit(me)}`} style={at(me)}>
+          <li className={`rival me${mine && !dealing ? ' turn' : ''}${hit(me)}`} style={at(me, mine ? { '--share': share } : undefined)}>
             <span className="rival-who"><Avatar code={avatarAt(st, me)} name={nameAt(st, me)} /></span>
             <span className="rival-name"><Name name={nameAt(st, me)} fx={fxAt(st, me)} /></span>
             {mine && <span className="seat-timer" aria-hidden="true"><i style={{ width: `${share * 100}%` }} /></span>}
@@ -334,8 +385,17 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
         {fx.flights.flatMap((f) => Array.from({ length: Math.min(f.n, 4) }, (_, k) => <span key={`${f.seat}-${k}`} className="ono-fly card card-back" style={at(f.seat, { '--d': `${k * 110}ms` })} />))}
         {fx.badges.map((b) => <b key={`${b.seat}-${b.text}`} className="ono-badge" style={at(b.seat)}>{b.text}</b>)}
         {fx.call && <span className={`ono-burst glow-${v.color}`} />}
+        {yours > 0 && <b className="ono-yours" key={`yours-${yours}`}>{t('À vous !', 'Your turn!')}</b>}
         {fx.call && fx.call !== 'wild' && <b className={`ono-call call-${fx.call === 'rev' && v.dir < 0 ? 'rev back' : fx.call.replace('+', 'plus')}`}><Figure k={fx.call} /></b>}
       </div>
+      {/* La distribution : une carte par joueur, sept tours de table. */}
+      {dealing && (
+        <div className="ono-fx" aria-hidden="true">
+          {Array.from({ length: DEALT }, (_, k) => Array.from({ length: n }, (_, seat) => (
+            <span key={`${k}-${seat}`} className="ono-fly card card-back" style={at(seat, { '--d': dealAt(seat, k) })} />
+          )))}
+        </div>
+      )}
       </div>
       <p className="story" role="status">{story(st, v, t)}</p>
 
@@ -357,11 +417,11 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
             </div>
           )}
           <h2 className="hand-title sr">{t(`Votre main, ${v.hand.length} carte${v.hand.length > 1 ? 's' : ''}`, `Your hand, ${v.hand.length} card${v.hand.length === 1 ? '' : 's'}`)}</h2>
-          <ul className={`hand${mine ? ' choosing' : ''}`} style={{ '--spread': `${Math.min(4.5, 30 / Math.max(1, v.hand.length))}deg` } as CSSProperties}>
+          <ul className={`hand${mine && !dealing ? ' choosing' : ''}`} style={{ '--spread': `${Math.min(4.5, 30 / Math.max(1, v.hand.length))}deg` } as CSSProperties}>
             {v.hand.map((c, i) => {
               const ok = v.playable.includes(c.id);
               return (
-                <li key={c.id} style={{ '--i': Math.min(i, 10), '--k': i - (v.hand.length - 1) / 2 } as CSSProperties}>
+                <li key={c.id} style={{ '--i': Math.min(i, 10), '--k': i - (v.hand.length - 1) / 2, animationDelay: dealing ? dealAt(Math.max(me, 0), i) : undefined } as CSSProperties}>
                   <button className={`card-btn${ok ? ' ok' : ''}${picking === c.id ? ' picked' : ''}`} disabled={!ok} aria-label={cardName(c, t)} onClick={() => play(c)}>
                     <Face card={c} />
                   </button>

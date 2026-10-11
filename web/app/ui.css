@@ -305,6 +305,46 @@ button:disabled {
   height: 1.25rem;
   flex: none;
 }
+/* Un choix entre deux ou trois : des boutons accolés, celui qui vaut est plein. */
+.seg {
+  display: inline-flex;
+  padding: 0.2rem;
+  border-radius: var(--r);
+  background: var(--tint);
+}
+.seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.9rem;
+  padding: 0 0.7rem;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--sea);
+  color: #fff;
+  font-weight: 700;
+}
+.seg .ic {
+  width: 1rem;
+  height: 1rem;
+}
+.sea .seg:not(.light *) {
+  background: var(--hollow);
+}
+.sea .seg:not(.light *) button {
+  color: #fff;
+}
+.sea .seg:not(.light *) button[aria-pressed='true'] {
+  background: #fff;
+  color: var(--navy);
+}
 /* Un bouton écrit comme un lien, dans une phrase. */
 .as-link {
   padding: 0;

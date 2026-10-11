@@ -240,8 +240,18 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
       </section>
 
       <section className="lobby-switch" aria-labelledby="lobby-switch-title">
-        <h2 id="lobby-switch-title">{host ? t('Changer de jeu', 'Change game') : t('Les autres jeux', 'The other games')}</h2>
-        <ul className="picker" role={host ? 'radiogroup' : undefined} aria-labelledby="lobby-switch-title">
+        <div className="switch-head">
+          <h2 id="lobby-switch-title">{st.byVote ? t('Votez pour le prochain jeu', 'Vote for the next game') : host ? t('Changer de jeu', 'Change game') : t('Les autres jeux', 'The other games')}</h2>
+          {host ? (
+            <div className="seg" role="group" aria-label={t('Qui choisit le jeu', 'Who chooses the game')}>
+              <button aria-pressed={!st.byVote} onClick={() => send({ t: 'mode', a: 'host' })}><Ic name="crown" />{t('Je choisis', 'I choose')}</button>
+              <button aria-pressed={st.byVote} onClick={() => send({ t: 'mode', a: 'vote' })}><Ic name="check" />{t('Au vote', 'By vote')}</button>
+            </div>
+          ) : (
+            <small>{st.byVote ? t('Le jeu qui a le plus de voix est choisi.', 'The game with the most votes is chosen.') : t(`${hostName} choisit. Votre voix lui dit ce que vous préférez.`, `${hostName} chooses. Your vote tells them what you prefer.`)}</small>
+          )}
+        </div>
+        <ul className="picker" aria-labelledby="lobby-switch-title">
           {GAMES.map((g) => {
             const on = g.id === game.id;
             // Le jeu ne convient pas au groupe présent : la tuile dit pourquoi. Seul, tous les
@@ -251,12 +261,26 @@ function Lobby({ st, game, link, rules, report }: { st: TableState; game: Game; 
               : n > g.players[1]
                 ? t(`${g.players[1]} joueurs au plus`, `${g.players[1]} players at most`)
                 : '';
+            // L'hôte qui choisit lui-même choisit d'un clic ; tous les autres clics sont des voix.
+            const picks = host && !st.byVote;
+            const voices = st.votes?.[g.id] ?? 0;
+            const mine = st.vote === g.id;
             return (
               <li key={g.id}>
-                <button className={`pick-game${on ? ' on' : ''}`} role={host ? 'radio' : undefined} aria-checked={host ? on : undefined} disabled={!host} onClick={() => send({ t: 'game', id: g.id })}>
+                <button
+                  className={`pick-game${on ? ' on' : ''}${mine ? ' voted' : ''}`}
+                  aria-pressed={picks ? on : mine}
+                  title={picks ? t(`Choisir ${g.name}`, `Choose ${g.name}`) : mine ? t(`Reprendre ma voix pour ${g.name}`, `Take back my vote for ${g.name}`) : t(`Voter pour ${g.name}`, `Vote for ${g.name}`)}
+                  onClick={() => send({ t: picks ? 'game' : 'vote', id: g.id })}
+                >
                   <GameCover id={g.id} />
                   <b>{g.name}</b>
                   <small className={fit ? 'no' : undefined}>{fit || playersOf(g, t)}</small>
+                  {voices > 0 && (
+                    <span className="pill count pick-votes" key={voices}>
+                      <Ic name="check" />{voices}<span className="sr">{t(` voix${mine ? ', dont la vôtre' : ''}`, ` vote${voices === 1 ? '' : 's'}${mine ? ', yours included' : ''}`)}</span>
+                    </span>
+                  )}
                 </button>
               </li>
             );

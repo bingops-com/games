@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	mrand "math/rand/v2"
 	"slices"
 	"strings"
@@ -135,6 +136,11 @@ type Room struct {
 	// limit is how many players the host wants at most, 0 for as many as the
 	// chosen game takes.
 	limit int
+	// byVote says the players choose the game together: the one with the most
+	// votes is chosen. Otherwise the host chooses, and a vote is a wish. votes
+	// holds the game each member voted for.
+	byVote bool
+	votes  map[string]string
 	// unsaved is the state waiting to be written, and saving says a write is
 	// under way.
 	unsaved []byte
@@ -165,6 +171,7 @@ type saved struct {
 	Game    string         `json:"game"`
 	Public  bool           `json:"public"`
 	Limit   int            `json:"limit,omitempty"`
+	ByVote  bool           `json:"byVote,omitempty"`
 	Opts    map[string]int `json:"opts,omitempty"`
 	Words   []string       `json:"words,omitempty"`
 	Banned  []string       `json:"banned,omitempty"`
@@ -194,7 +201,7 @@ func (h *Hub) Restore(code string, state []byte) {
 	}
 	now := time.Now()
 	r := &Room{hub: h, Code: code, spec: spec, clients: map[*Client]bool{}, phase: "lobby", empty: now,
-		public: sv.Public, limit: sv.Limit, opts: sv.Opts, words: sv.Words, played: sv.Played, banned: map[string]bool{}}
+		public: sv.Public, limit: sv.Limit, byVote: sv.ByVote, opts: sv.Opts, words: sv.Words, played: sv.Played, banned: map[string]bool{}}
 	for _, id := range sv.Banned {
 		r.banned[id] = true
 	}
@@ -215,7 +222,7 @@ func (r *Room) persist() {
 		return
 	}
 	r.dirty = false
-	sv := saved{Game: r.spec.ID, Public: r.public, Limit: r.limit, Opts: r.opts, Words: r.words, Played: r.played}
+	sv := saved{Game: r.spec.ID, Public: r.public, Limit: r.limit, ByVote: r.byVote, Opts: r.opts, Words: r.words, Played: r.played}
 	for id := range r.banned {
 		sv.Banned = append(sv.Banned, id)
 	}
@@ -525,6 +532,50 @@ func (r *Room) halt() {
 }
 
 // toLobby ends whatever is being played and keeps the players who are there.
+// choose sets the game the room will play next.
+func (r *Room) choose(spec games.Spec) {
+	if r.phase == "over" {
+		r.toLobby()
+	}
+	if r.spec.ID != spec.ID {
+		// Each game has its own settings; the list of words is the host's.
+		r.opts = nil
+	}
+	r.spec = spec
+	// The limit follows the game: it never asks for more than it takes.
+	if r.limit > 0 {
+		r.limit = max(spec.Min, min(r.limit, spec.Max, lobbySeats))
+	}
+}
+
+// tally counts the votes of those still in the room and, when the game is
+// chosen by vote, chooses the one with the most. A tie keeps the game already
+// chosen if it is among the leaders, else the first of them by name: the same
+// votes always give the same game.
+func (r *Room) tally() map[string]int {
+	count := map[string]int{}
+	for id, game := range r.votes {
+		if r.member(id) == nil {
+			delete(r.votes, id)
+			continue
+		}
+		count[game]++
+	}
+	if !r.byVote || r.phase == "playing" || len(count) == 0 {
+		return count
+	}
+	best := r.spec.ID
+	for _, game := range slices.Sorted(maps.Keys(count)) {
+		if count[game] > count[best] {
+			best = game
+		}
+	}
+	if best != r.spec.ID {
+		r.choose(games.Specs[best])
+	}
+	return count
+}
+
 func (r *Room) toLobby() {
 	r.halt()
 	r.phase, r.game, r.winners = "lobby", nil, nil
@@ -593,18 +644,33 @@ func (r *Room) handle(c *Client, msg message) error {
 		if !ok {
 			return Error("Jeu inconnu")
 		}
-		if r.phase == "over" {
-			r.toLobby()
+		if r.byVote {
+			return Error("Le jeu se choisit au vote dans ce salon")
 		}
-		if r.spec.ID != spec.ID {
-			// Each game has its own settings; the list of words is the host's.
-			r.opts = nil
+		r.choose(spec)
+	case "vote":
+		if r.phase == "playing" {
+			return Error("On vote entre deux parties")
 		}
-		r.spec = spec
-		// The limit follows the game: it never asks for more than it takes.
-		if r.limit > 0 {
-			r.limit = max(spec.Min, min(r.limit, spec.Max, lobbySeats))
+		if _, ok := games.Specs[msg.ID]; !ok {
+			return Error("Jeu inconnu")
 		}
+		if r.votes == nil {
+			r.votes = map[string]string{}
+		}
+		// Voting again for the same game takes the vote back.
+		if r.votes[m.ID] == msg.ID {
+			delete(r.votes, m.ID)
+		} else {
+			r.votes[m.ID] = msg.ID
+		}
+		r.tally()
+	case "mode":
+		if !host || r.phase == "playing" {
+			return Error("Seul l'hôte règle la partie, entre deux parties")
+		}
+		r.byVote = string(msg.A) == `"vote"`
+		r.tally()
 	case "limit":
 		if !host || r.phase == "playing" {
 			return Error("Seul l'hôte règle la partie, entre deux parties")
@@ -894,6 +960,11 @@ type state struct {
 	// how many words a custom list needs (0: the game draws none), Words how
 	// many the host's list has, and List that list, for the host alone.
 	Public bool `json:"public"`
+	// ByVote says the game is chosen by vote; Votes counts the votes for each
+	// game, and Vote is the game this player voted for.
+	ByVote bool           `json:"byVote"`
+	Votes  map[string]int `json:"votes"`
+	Vote   string         `json:"vote"`
 	// Limit is how many players the host wants at most, 0 for no limit.
 	Limit    int       `json:"limit"`
 	Played   int       `json:"played"`
@@ -927,6 +998,7 @@ func (r *Room) broadcast() {
 	for _, m := range r.members {
 		st.Members = append(st.Members, memberView{ID: m.ID, Name: m.Name, Avatar: m.Avatar, Fx: m.Fx, Account: m.UserID != "", On: m.conns > 0, Seat: m.seat, Wins: m.wins})
 	}
+	st.ByVote, st.Votes = r.byVote, r.tally()
 	st.Public, st.Limit, st.Played, st.WordsMin, st.Words, st.Options = r.public, r.limit, r.played, r.spec.Words, len(r.words), []optView{}
 	for _, o := range r.spec.Options {
 		st.Options = append(st.Options, optView{Key: o.Key, Min: o.Min, Max: o.Max, Step: o.Step, Value: games.Options{Values: r.opts}.Int(o.Key, o.Def)})
@@ -934,7 +1006,7 @@ func (r *Room) broadcast() {
 	r.persist()
 	views := map[int]any{}
 	for c := range r.clients {
-		st.You, st.Seat, st.View, st.List = c.id, -1, nil, nil
+		st.You, st.Seat, st.View, st.List, st.Vote = c.id, -1, nil, nil, r.votes[c.id]
 		if c.id == st.Host && r.phase != "playing" {
 			st.List = r.words
 		}

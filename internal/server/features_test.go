@@ -202,6 +202,28 @@ func TestRoomLife(t *testing.T) {
 	if rooms := guest.want(200, "GET", "/api/rooms", "")["rooms"].([]any); len(rooms) != 1 || rooms[0].(map[string]any)["max"] != float64(5) {
 		t.Fatalf("rooms with a limit of five = %v", rooms)
 	}
+	// Anyone may vote for a game. While the host chooses, a vote is a wish;
+	// once the room chooses by vote, the game with the most votes is chosen,
+	// and the host no longer picks it alone.
+	sendG(`{"t":"vote","id":"terre"}`)
+	wish := until(t, nextG, func(s map[string]any) bool { return s["t"] == "state" && s["vote"] == "terre" })
+	if wish["game"] != "meche" || wish["votes"].(map[string]any)["terre"] != float64(1) {
+		t.Fatalf("a wish while the host chooses: game %v, votes %v", wish["game"], wish["votes"])
+	}
+	sendG(`{"t":"mode","a":"vote"}`)
+	until(t, nextG, func(s map[string]any) bool { return s["t"] == "error" })
+	sendB(`{"t":"mode","a":"vote"}`)
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "state" && s["byVote"] == true && s["game"] == "terre" })
+	sendB(`{"t":"game","id":"meche"}`)
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "error" })
+	// A tie keeps the game already chosen; taking a vote back breaks it.
+	sendB(`{"t":"vote","id":"meche"}`)
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "state" && s["vote"] == "meche" && s["game"] == "terre" })
+	sendG(`{"t":"vote","id":"terre"}`)
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "state" && s["game"] == "meche" })
+	sendB(`{"t":"mode","a":"host"}`)
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "state" && s["byVote"] == false })
+
 	sendG(`{"t":"public","a":false}`)
 	until(t, nextG, func(s map[string]any) bool { return s["t"] == "error" })
 	sendB(`{"t":"public","a":false}`)

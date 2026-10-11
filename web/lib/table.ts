@@ -36,6 +36,11 @@ export interface TableState<V = unknown> {
   // de l'hôte pour le jeu choisi ; et sa liste de mots (wordsMin : combien il en faut, 0
   // si le jeu n'en tire pas ; list : la liste, que seul l'hôte reçoit).
   public: boolean;
+  // Le jeu se choisit au vote (sinon l'hôte choisit, et un vote est un souhait) ; les voix de
+  // chaque jeu ; et le jeu pour lequel ce joueur a voté.
+  byVote: boolean;
+  votes: Record<string, number>;
+  vote: string;
   // Combien de joueurs l'hôte veut au plus dans le salon ; 0 : autant que le jeu en prend.
   limit: number;
   played: number;
