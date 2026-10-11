@@ -311,15 +311,23 @@
 }
 
 /* Qui joue, au pied de la bande. */
+/* Il reste collé au pied de la bande, même quand elle défile : ce qui est au-dessus passe
+   dessous. */
 .who {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
-  padding: 0.9rem 0.4rem 1rem;
+  margin: auto -0.9rem 0;
+  padding: 0.9rem 1.3rem 1rem;
   border-top: 1px solid var(--veil-strong);
+  background: var(--sea-deep);
 }
 /* Dans un salon le chat s'efface : le compte reste au pied de la bande. */
-.side.in-room .who {
+.side.in-room .who,
+.side .mascot + .who {
   margin-top: 0;
 }
 .who-links {
@@ -1872,10 +1880,13 @@ img.art {
     margin: 0;
   }
   .who {
+    position: static;
     flex-direction: row;
     align-items: center;
+    margin: 0;
     padding: 0;
     border: 0;
+    background: none;
   }
   .who .btn {
     width: auto;

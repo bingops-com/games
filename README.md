@@ -414,6 +414,11 @@ jeu (la bombe de BoomParty, celles de Bombermat). Thèmes clair et sombre.
 - `internal/store` : PostgreSQL (comptes, sessions, amis, statistiques)
 - `chart` : le chart Helm
 - `art` : l'image source du logo et le script qui le décline
+- `web/e2e` : les scénarios de bout en bout (`make e2e`, contre un serveur qui
+  tourne) : inscription, retour au salon, discussion, amis et invitations,
+  partie publique, un tour d'Ono, un déplacement et une bombe à Bombermat, la
+  largeur sur téléphone. Ils pilotent Chromium avec `playwright-core`
+  (`CHROMIUM=/chemin` si aucun n'est installé au chemin habituel).
 - `web/app` : pages et feuilles de style (`ui.css` : les jetons et le kit ;
   `globals.css` : le cadre et les pages ; `stages.css` : les scènes)
 - `web/components` : cadre, accueil, salon (`Table.tsx`), profil, amis, mascotte
