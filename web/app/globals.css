@@ -1823,6 +1823,12 @@ img.art {
     margin-bottom: 0.7rem;
   }
 }
+/* Téléphone : le logo seul, pour que le compte tienne sur sa ligne. */
+@media (max-width: 30rem) {
+  .lockup-kind {
+    display: none;
+  }
+}
 /* Écran étroit : la bande devient une barre en haut de page. */
 @media (max-width: 56rem) {
   #app {
@@ -1894,6 +1900,12 @@ img.art {
   .who-name b,
   .who .btn.onsea {
     display: none;
+  }
+  .who-links {
+    flex-direction: row;
+  }
+  .who .lang {
+    align-self: center;
   }
   .home {
     grid-template-columns: minmax(0, 1fr);

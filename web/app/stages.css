@@ -1466,16 +1466,16 @@ button.crew-chip:hover,
    survole se redresse et sort du lot. */
 .hand {
   display: flex;
-  justify-content: safe center;
-  padding: 1.9rem 1.5rem 0.9rem;
-  /* Une main énorme sur un petit écran défile dans sa rangée, pas la page. */
-  overflow-x: auto;
-  scrollbar-width: none;
+  justify-content: center;
+  /* La dernière carte, entière, et le coin relevé des cartes du bord tiennent dans la marge. */
+  padding: 1.9rem 1.25rem 0.9rem;
 }
+/* Une main qui grossit se resserre : toutes les cartes restent à l'écran, même sur un
+   téléphone, et celle qu'on vise passe devant les autres. */
 .hand li {
   position: relative;
   flex: 0 1 calc(var(--card) * 0.74);
-  min-width: 1.15rem;
+  min-width: 0;
   transform: rotate(calc(var(--k, 0) * var(--spread, 0deg)));
   transform-origin: 50% 160%;
   transition: transform 0.25s var(--ease), flex-basis 0.25s var(--ease);
@@ -2807,6 +2807,15 @@ button.crew-chip:hover,
   #app:has(.play) .who,
   #app:has(.play) #nav,
   #app:has(.play) .lockup span {
+    display: none;
+  }
+  /* La barre du jeu : son nom, puis ses boutons, qui passent à la ligne s'il le faut. La
+     pleine fenêtre n'apporte rien quand la bande n'est déjà qu'une barre. */
+  .board-bar {
+    flex-wrap: wrap;
+    gap: 0.4rem 0.75rem;
+  }
+  .board-tools [aria-pressed] {
     display: none;
   }
   /* Sur un téléphone la table a besoin de hauteur pour asseoir tout le monde. */

@@ -355,7 +355,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
             </div>
           )}
           <h2 className="hand-title sr">{t(`Votre main, ${v.hand.length} carte${v.hand.length > 1 ? 's' : ''}`, `Your hand, ${v.hand.length} card${v.hand.length === 1 ? '' : 's'}`)}</h2>
-          <ul className={`hand${mine ? ' choosing' : ''}`} style={{ '--spread': `${Math.min(4.5, 42 / Math.max(1, v.hand.length))}deg` } as CSSProperties}>
+          <ul className={`hand${mine ? ' choosing' : ''}`} style={{ '--spread': `${Math.min(4.5, 30 / Math.max(1, v.hand.length))}deg` } as CSSProperties}>
             {v.hand.map((c, i) => {
               const ok = v.playable.includes(c.id);
               return (
