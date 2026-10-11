@@ -135,6 +135,19 @@ CREATE TABLE rooms (
 	state      JSONB NOT NULL,
 	updated_at BIGINT NOT NULL
 );
+`, `
+-- An address counts once its owner has opened the link sent to it: until
+-- then no password is recovered through it. Those given before the link
+-- existed are taken on trust.
+ALTER TABLE users ADD COLUMN email_checked BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE users SET email_checked = TRUE WHERE email <> '';
+
+CREATE TABLE email_checks (
+	token_hash TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+	email      TEXT NOT NULL,
+	expires_at BIGINT NOT NULL
+);
 `}
 
 // Held while the schema is upgraded, so that two instances starting together
@@ -212,8 +225,10 @@ type User struct {
 	// their name wears, or empty.
 	Credits int
 	Fx      string
-	// Email is where a link to choose a new password may be sent, or empty.
-	Email string
+	// Email is where a link to choose a new password may be sent, or empty;
+	// EmailChecked says its owner opened the link sent to it.
+	Email        string
+	EmailChecked bool
 	// EarnedToday is how many credits today's games have paid so far.
 	EarnedToday int
 }
@@ -257,7 +272,7 @@ func (s *Store) Credentials(ctx context.Context, name string) (id, password stri
 
 func (s *Store) user(ctx context.Context, where string, args ...any) (*User, error) {
 	u := &User{}
-	err := s.db.QueryRowContext(ctx, "SELECT u.id, u.name, u.created_at, u.avatar, u.credits, u.name_fx, u.email, CASE WHEN u.credits_day = $"+fmt.Sprint(len(args)+1)+" THEN u.credits_today ELSE 0 END FROM users u "+where, append(args, today())...).Scan(&u.ID, &u.Name, &u.Since, &u.Avatar, &u.Credits, &u.Fx, &u.Email, &u.EarnedToday)
+	err := s.db.QueryRowContext(ctx, "SELECT u.id, u.name, u.created_at, u.avatar, u.credits, u.name_fx, u.email, u.email_checked, CASE WHEN u.credits_day = $"+fmt.Sprint(len(args)+1)+" THEN u.credits_today ELSE 0 END FROM users u "+where, append(args, today())...).Scan(&u.ID, &u.Name, &u.Since, &u.Avatar, &u.Credits, &u.Fx, &u.Email, &u.EmailChecked, &u.EarnedToday)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -282,9 +297,10 @@ func (s *Store) SetAvatar(ctx context.Context, userID, avatar string) error {
 	return err
 }
 
-// SetEmail saves the address of an account; an empty one removes it.
+// SetEmail saves the address of an account. Another address is one its owner
+// has not confirmed yet.
 func (s *Store) SetEmail(ctx context.Context, userID, email string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE users SET email = $1 WHERE id = $2", email, userID)
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET email_checked = email_checked AND lower(email) = lower($1), email = $1 WHERE id = $2", email, userID)
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) && pg.Code == "23505" {
 		return ErrEmailUsed
@@ -294,6 +310,40 @@ func (s *Store) SetEmail(ctx context.Context, userID, email string) error {
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (*User, error) {
 	return s.user(ctx, "WHERE u.email <> '' AND lower(u.email) = lower($1)", email)
+}
+
+// CreateCheck remembers a link to confirm an address; an account has one at a
+// time.
+func (s *Store) CreateCheck(ctx context.Context, userID, email, tokenHash string, expires time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, "DELETE FROM email_checks WHERE user_id = $1 OR expires_at < $2", userID, now()); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO email_checks (token_hash, user_id, email, expires_at) VALUES ($1, $2, $3, $4)", tokenHash, userID, email, expires.UnixMilli()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ConfirmEmail marks the address a link was sent to as confirmed, if the
+// account still has it, and returns the address.
+func (s *Store) ConfirmEmail(ctx context.Context, tokenHash string) (string, error) {
+	var email string
+	err := s.db.QueryRowContext(ctx, `UPDATE users u SET email_checked = TRUE FROM email_checks c
+		WHERE c.token_hash = $1 AND c.expires_at > $2 AND u.id = c.user_id AND lower(u.email) = lower(c.email)
+		RETURNING u.email`, tokenHash, now()).Scan(&email)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	_, err = s.db.ExecContext(ctx, "DELETE FROM email_checks WHERE token_hash = $1", tokenHash)
+	return email, err
 }
 
 // SetPassword changes the password of an account and closes every session

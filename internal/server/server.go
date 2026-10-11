@@ -124,6 +124,8 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 	api.HandleFunc("POST /api/logout", s.handle(s.logout))
 	api.HandleFunc("GET /api/me", s.handle(s.me))
 	api.HandleFunc("POST /api/account/email", s.handle(s.setEmail))
+	api.HandleFunc("POST /api/account/email/check", s.handle(s.resendCheck))
+	api.HandleFunc("POST /api/confirm", s.handle(s.confirm))
 	api.HandleFunc("POST /api/account/password", s.handle(s.setPassword))
 	api.HandleFunc("POST /api/forgot", s.handle(s.forgot))
 	api.HandleFunc("POST /api/reset", s.handle(s.reset))
@@ -362,8 +364,10 @@ type account struct {
 	EarnedToday int `json:"earnedToday"`
 	DailyCap    int `json:"dailyCap"`
 	// The address a lost password is recovered through, and who is blocked.
-	Email   string   `json:"email"`
-	Blocked []string `json:"blocked"`
+	Email string `json:"email"`
+	// EmailChecked says the address was confirmed by the link sent to it.
+	EmailChecked bool     `json:"emailChecked"`
+	Blocked      []string `json:"blocked"`
 }
 
 func (s *Server) account(ctx context.Context, u *store.User) (map[string]any, error) {
@@ -384,7 +388,7 @@ func (s *Server) account(ctx context.Context, u *store.User) (map[string]any, er
 		return nil, err
 	}
 	return map[string]any{"user": account{Name: u.Name, Since: u.Since, Received: received, Avatar: u.Avatar, Objectives: objectiveViews(p), Streak: streak, Credits: u.Credits, Items: items, Fx: u.Fx,
-		EarnedToday: u.EarnedToday, DailyCap: store.CreditsPerDay, Email: u.Email, Blocked: blocked}}, nil
+		EarnedToday: u.EarnedToday, DailyCap: store.CreditsPerDay, Email: u.Email, EmailChecked: u.EmailChecked, Blocked: blocked}}, nil
 }
 
 func tokenHash(token string) string {
@@ -476,6 +480,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := s.openSession(w, r, u.ID); err != nil {
 		return nil, err
 	}
+	s.sendCheck(r, u)
 	return s.account(r.Context(), u)
 }
 

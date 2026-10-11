@@ -135,6 +135,10 @@ type Room struct {
 	// limit is how many players the host wants at most, 0 for as many as the
 	// chosen game takes.
 	limit int
+	// unsaved is the state waiting to be written, and saving says a write is
+	// under way.
+	unsaved []byte
+	saving  bool
 	// opts and words are the host's settings for the chosen game.
 	opts  map[string]int
 	words []string
@@ -218,8 +222,32 @@ func (r *Room) persist() {
 	for _, m := range r.members {
 		sv.Members = append(sv.Members, savedMember{ID: m.ID, Name: m.Name, Avatar: m.Avatar, Fx: m.Fx, UserID: m.UserID, Wins: m.wins})
 	}
-	if raw, err := json.Marshal(sv); err == nil {
-		go r.hub.Save(r.Code, raw)
+	raw, err := json.Marshal(sv)
+	if err != nil {
+		return
+	}
+	// One save at a time, and always the latest state: two of them written
+	// side by side could land in the wrong order and bring back an old room.
+	r.unsaved = raw
+	if !r.saving {
+		r.saving = true
+		go r.save()
+	}
+}
+
+// save writes what the room last asked to keep, until nothing is left.
+func (r *Room) save() {
+	for {
+		r.mu.Lock()
+		raw := r.unsaved
+		r.unsaved = nil
+		if raw == nil {
+			r.saving = false
+			r.mu.Unlock()
+			return
+		}
+		r.mu.Unlock()
+		r.hub.Save(r.Code, raw)
 	}
 }
 

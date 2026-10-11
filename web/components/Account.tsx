@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { App, useApp, useT } from '@/lib/app';
+import { Ic } from './ui';
 
 // Mon compte : l'adresse qui permet de récupérer un mot de passe perdu, le mot de passe, et
 // les joueurs bloqués. Toucher à l'adresse ou au mot de passe redemande le mot de passe.
@@ -27,13 +28,14 @@ export default function Account() {
     const form = e.currentTarget;
     const f = new FormData(form);
     try {
-      await App.setEmail(String(f.get('email')).trim(), String(f.get('password')));
-      App.toast(f.get('email') ? t('Adresse enregistrée', 'Address saved') : t('Adresse retirée', 'Address removed'));
+      const out = await App.setEmail(String(f.get('email')).trim(), String(f.get('password')));
+      App.toast(out.emailChecked ? t('Adresse enregistrée', 'Address saved') : t('Adresse enregistrée. Un lien y part pour la confirmer.', 'Address saved. A link is on its way to confirm it.'));
       (form.elements.namedItem('password') as HTMLInputElement).value = '';
     } catch (err) {
       App.toast((err as Error).message);
     }
   };
+  const resend = () => App.resendCheck().then(() => App.toast(t(`Lien envoyé à ${account.email}`, `Link sent to ${account.email}`)), (err: Error) => App.toast(err.message));
   const savePassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -53,15 +55,22 @@ export default function Account() {
 
       <section>
         <h2>{t('Adresse e-mail', 'Email address')}</h2>
-        <p className="hint">
-          {account.email
-            ? t('Si vous perdez votre mot de passe, un lien pour en choisir un autre part à cette adresse. Elle ne sert à rien d’autre et personne ne la voit.', 'If you lose your password, a link to choose another one is sent to this address. It is used for nothing else and nobody sees it.')
-            : t('Sans adresse, un mot de passe oublié fait perdre le compte, ses crédits et ses objectifs. Elle ne sert qu’à ça et personne ne la voit.', 'With no address, a forgotten password means losing the account, its credits and its objectives. It is used for that alone and nobody sees it.')}
-        </p>
+        {account.email ? (
+          <p className={account.emailChecked ? 'email-state ok' : 'email-state'} role="status">
+            <Ic name={account.emailChecked ? 'check' : 'lock'} />
+            {account.emailChecked
+              ? t('Adresse confirmée : elle peut servir à retrouver votre mot de passe.', 'Address confirmed: it can be used to recover your password.')
+              : t('Pas encore confirmée : ouvrez le lien envoyé à cette adresse. Tant qu’elle ne l’est pas, un mot de passe oublié ne se récupère pas.', 'Not confirmed yet: open the link sent to this address. Until then, a forgotten password cannot be recovered.')}
+            {!account.emailChecked && <button className="as-link" onClick={resend}>{t('Renvoyer le lien', 'Send the link again')}</button>}
+          </p>
+        ) : (
+          <p className="email-state" role="status"><Ic name="lock" />{t('Ce compte n’a pas d’adresse : un mot de passe oublié le ferait perdre. Donnez-en une.', 'This account has no address: a forgotten password would lose it. Give one.')}</p>
+        )}
+        <p className="hint">{t('Elle ne sert qu’à ça, et personne ne la voit.', 'It is used for that alone, and nobody sees it.')}</p>
         <form className="stack" onSubmit={saveEmail}>
           <label>
             {t('Adresse e-mail', 'Email address')}
-            <input name="email" type="email" defaultValue={account.email} autoComplete="email" maxLength={254} placeholder={t('vous@exemple.fr', 'you@example.com')} />
+            <input name="email" type="email" defaultValue={account.email} autoComplete="email" required maxLength={254} placeholder={t('vous@exemple.fr', 'you@example.com')} />
           </label>
           <label>
             {t('Votre mot de passe, pour confirmer', 'Your password, to confirm')}
@@ -135,6 +144,38 @@ export function Reset() {
         </label>
         <button className="btn primary" disabled={busy}>{t('Enregistrer et me connecter', 'Save and sign me in')}</button>
       </form>
+    </div>
+  );
+}
+
+// La page du lien de confirmation : l'adresse est confirmée dès qu'on l'ouvre, connecté ou non.
+export function Confirm() {
+  const t = useT();
+  const token = useSearchParams().get('t') ?? '';
+  const [state, setState] = useState<{ email?: string; error?: string }>({});
+  useEffect(() => {
+    if (!token) return;
+    App.confirmEmail(token).then((email) => setState({ email }), (err: Error) => setState({ error: err.message }));
+  }, [token]);
+  const home = <Link className="btn primary" href="/">{t('Aller jouer', 'Go and play')}</Link>;
+  if (!token) return <p className="notice">{t('Ce lien est incomplet.', 'This link is incomplete.')} <Link href="/">{t('Revenir à l’accueil', 'Back to the home page')}</Link></p>;
+  return (
+    <div className="friends account">
+      <h1>{t('Votre adresse e-mail', 'Your email address')}</h1>
+      {state.email && (
+        <>
+          <p className="pitch">{t(`${state.email} est confirmée. Si vous perdez votre mot de passe, un lien pour en choisir un autre y sera envoyé.`, `${state.email} is confirmed. If you lose your password, a link to choose another one will be sent there.`)}</p>
+          {home}
+        </>
+      )}
+      {state.error && (
+        <>
+          <p className="pitch">{state.error}</p>
+          <p className="hint">{t('Un lien de confirmation marche trois jours, une fois. Connectez-vous, puis demandez-en un autre sur la page « Mon compte ».', 'A confirmation link works for three days, once. Sign in, then ask for another one on the "My account" page.')}</p>
+          {home}
+        </>
+      )}
+      {!state.email && !state.error && <p className="pitch">{t('Confirmation en cours…', 'Confirming…')}</p>}
     </div>
   );
 }

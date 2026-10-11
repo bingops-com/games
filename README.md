@@ -206,14 +206,19 @@ par objectif.
 
 ## Récupérer un compte
 
-Un compte se crée avec une adresse e-mail, une seule par compte ; elle se change
-ou se retire ensuite sur la page « Mon compte » avec le mot de passe en
-confirmation. Les comptes créés avant que l'adresse soit demandée n'en ont pas
-tant qu'ils n'en règlent pas une. « Mot de passe oublié ? » envoie
-à cette adresse un lien valable une heure, utilisable une fois, qui fait choisir
-un nouveau mot de passe, connecte, et ferme toutes les autres sessions. La
-réponse est la même que le compte existe, ait une adresse ou non. Un compte sans
-adresse ne se récupère pas.
+Un compte se crée avec une adresse e-mail, une seule par compte. À
+l'inscription, et chaque fois qu'elle change, un lien valable trois jours y est
+envoyé : l'ouvrir (`/confirmer/?t=…`, connecté ou non) la confirme. Elle se
+change sur la page « Mon compte » avec le mot de passe en confirmation, mais ne
+se retire plus ; la page dit si elle est confirmée et renvoie le lien. Les
+adresses données avant l'existence du lien sont tenues pour confirmées, et les
+comptes plus anciens encore n'en ont pas tant qu'ils n'en règlent pas une.
+
+« Mot de passe oublié ? » envoie à une adresse **confirmée** un lien valable
+une heure, utilisable une fois, qui fait choisir un nouveau mot de passe,
+connecte, et ferme toutes les autres sessions. La réponse est la même que le
+compte existe, ait une adresse confirmée ou non. Un compte sans adresse
+confirmée ne se récupère pas.
 
 L'envoi passe par un relais SMTP (`GAMES_SMTP_ADDR`, `hôte:port` ; au besoin
 `GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`) ; `GAMES_MAIL_FROM` et
@@ -293,6 +298,8 @@ invitations vivent dans la mémoire du serveur, comme les salons.
   l'on se trouve.
 - `GET /api/profile/{pseudo}` : le profil public, et ce qui lie le visiteur
   connecté à ce joueur (`self`, `none`, `sent`, `received`, `friends`).
+- `POST /api/account/email/check` renvoie le lien de confirmation ;
+  `POST /api/confirm` `{token}` confirme l'adresse.
 - `POST /api/account/email` `{email, password}` et `/api/account/password`
   `{old, new}` : l'adresse et le mot de passe du compte. `POST /api/forgot`
   `{name}` envoie le lien ; `POST /api/reset` `{token, password}` s'en sert.

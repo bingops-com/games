@@ -103,8 +103,8 @@ function ForgotDialog() {
     <Dialog title={t('Mot de passe oublié', 'Forgotten password')} onClose={closeModal} onSubmit={submit}>
       {sent ? (
         <>
-          <p>{t('Si ce compte a une adresse e-mail, un lien vient d’y partir. Il marche une heure. Pensez à regarder dans les indésirables.', 'If this account has an email address, a link has just been sent to it. It works for one hour. Check your spam folder too.')}</p>
-          <p>{t('Un compte sans adresse ne peut pas être récupéré.', 'An account with no address cannot be recovered.')}</p>
+          <p>{t('Si ce compte a une adresse e-mail confirmée, un lien vient d’y partir. Il marche une heure. Pensez à regarder dans les indésirables.', 'If this account has a confirmed email address, a link has just been sent to it. It works for one hour. Check your spam folder too.')}</p>
+          <p>{t('Un compte sans adresse confirmée ne peut pas être récupéré.', 'An account with no confirmed address cannot be recovered.')}</p>
           <button type="button" className="btn primary" onClick={closeModal}>{t('Fermer', 'Close')}</button>
         </>
       ) : (
@@ -391,7 +391,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   // ne sont pas un nom de jeu sont remplacés ici.
   const path = usePathname();
   useEffect(() => {
-    const en = ({ '/amis/': 'Friends', '/objectifs/': 'Objectives', '/magasin/': 'Shop', '/compte/': 'Account', '/reinitialiser/': 'New password', '/u/': 'Profile', '/t/': 'Room' } as Record<string, string>)[path];
+    const en = ({ '/amis/': 'Friends', '/objectifs/': 'Objectives', '/magasin/': 'Shop', '/compte/': 'Account', '/reinitialiser/': 'New password', '/confirmer/': 'Email address', '/u/': 'Profile', '/t/': 'Room' } as Record<string, string>)[path];
     if (lang === 'en' && en) document.title = `${en}, lab.bingo games`;
     // La pleine fenêtre ne survit pas à un changement de page.
     App.setFull(false);

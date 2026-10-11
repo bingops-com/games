@@ -34,6 +34,9 @@ export interface Account {
   dailyCap: number;
   // L'adresse par laquelle récupérer un mot de passe perdu, et les joueurs bloqués.
   email: string;
+  // L'adresse a été confirmée par le lien qu'on y a envoyé : elle peut servir à récupérer
+  // le compte.
+  emailChecked: boolean;
   blocked: string[];
 }
 
@@ -313,8 +316,19 @@ export const App = {
     void App.loadPals();
   },
   async setEmail(email: string, password: string) {
-    const out = await App.api<{ email: string }>('/api/account/email', { email, password });
-    if (state.account) set({ account: { ...state.account, email: out.email } });
+    const out = await App.api<{ email: string; emailChecked: boolean }>('/api/account/email', { email, password });
+    if (state.account) set({ account: { ...state.account, email: out.email, emailChecked: out.emailChecked } });
+    return out;
+  },
+  // Renvoie le lien qui confirme l'adresse du compte.
+  async resendCheck() {
+    await App.api('/api/account/email/check', {});
+  },
+  // Le lien reçu par e-mail confirme l'adresse, connecté ou non.
+  async confirmEmail(token: string) {
+    const out = await App.api<{ email: string }>('/api/confirm', { token });
+    if (state.account?.email.toLowerCase() === out.email.toLowerCase()) set({ account: { ...state.account, emailChecked: true } });
+    return out.email;
   },
   // Un nouveau mot de passe choisi depuis le lien reçu par e-mail : il connecte.
   async reset(token: string, password: string) {
@@ -350,7 +364,7 @@ export const App = {
     setAccount(user);
     set({ modal: null });
     await App.adopt();
-    App.toast(kind === 'register' ? tr('Compte créé', 'Account created') : tr('Connecté', 'Signed in'));
+    App.toast(kind === 'register' ? tr('Compte créé. Un lien part à votre adresse pour la confirmer.', 'Account created. A link is on its way to your address to confirm it.') : tr('Connecté', 'Signed in'));
   },
   async signOut() {
     await App.api('/api/logout', {}).catch(() => null);

@@ -13,8 +13,12 @@ import (
 	"github.com/bingops-com/games/internal/store"
 )
 
-// A link to choose a new password works once, for this long.
-const resetLife = time.Hour
+// A link to choose a new password works once, for this long; one to confirm
+// an address, for longer: it may wait in a mailbox.
+const (
+	resetLife = time.Hour
+	checkLife = 3 * 24 * time.Hour
+)
 
 var emailRule = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
 
@@ -42,8 +46,93 @@ func (s *Server) confirmed(r *http.Request, password string) (*store.User, error
 	return u, nil
 }
 
-// setEmail saves the address a lost password can be recovered through, or
-// removes it when it is empty.
+// baseURL is where the links sent by mail lead.
+func (s *Server) baseURL(r *http.Request) string {
+	if s.cfg.PublicURL != "" {
+		return strings.TrimRight(s.cfg.PublicURL, "/")
+	}
+	scheme := "http"
+	if s.secure(r) {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+func newToken() string {
+	raw := make([]byte, 32)
+	rand.Read(raw)
+	return hex.EncodeToString(raw)
+}
+
+// sendCheck mails the link that confirms the address of an account. It leaves
+// after the answer, like every message.
+func (s *Server) sendCheck(r *http.Request, u *store.User) {
+	base, id, name, email := s.baseURL(r), u.ID, u.Name, u.Email
+	if email == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+		defer cancel()
+		token := newToken()
+		if err := s.store.CreateCheck(ctx, id, email, tokenHash(token), time.Now().Add(checkLife)); err != nil {
+			s.log.Error("create check", "err", err)
+			return
+		}
+		link := base + "/confirmer/?t=" + token
+		text := "Bonjour " + name + ",\n\n" +
+			"Cette adresse a été donnée pour votre compte lab.bingo games. Pour la confirmer, ouvrez ce lien, valable trois jours :\n\n" +
+			link + "\n\n" +
+			"Elle ne sert qu'à retrouver un mot de passe perdu. Si ce compte n'est pas le vôtre, ignorez ce message.\n\n" +
+			"---\n\n" +
+			"Hello " + name + ",\n\n" +
+			"This address was given for your lab.bingo games account. To confirm it, open the link above; it works for three days. It is only used to recover a lost password. If this account is not yours, ignore this message.\n"
+		if err := s.cfg.Mail.Send(ctx, email, "Confirmez votre adresse lab.bingo games", text); err != nil {
+			s.log.Error("send check", "err", err)
+		}
+	}()
+}
+
+// resendCheck sends the confirmation link again.
+func (s *Server) resendCheck(w http.ResponseWriter, r *http.Request) (any, error) {
+	u, err := s.signedIn(r)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.throttleAuth(r); err != nil {
+		return nil, err
+	}
+	if u.Email == "" || u.EmailChecked {
+		return nil, bad("Il n'y a pas d'adresse à confirmer")
+	}
+	s.sendCheck(r, u)
+	return struct{}{}, nil
+}
+
+// confirm marks an address as confirmed, with the link sent to it. It needs
+// no session: the link is often opened on another device.
+func (s *Server) confirm(w http.ResponseWriter, r *http.Request) (any, error) {
+	if err := s.throttleAuth(r); err != nil {
+		return nil, err
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		return nil, err
+	}
+	email, err := s.store.ConfirmEmail(r.Context(), tokenHash(body.Token))
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, httpError{http.StatusGone, "Ce lien ne marche plus : demandez-en un nouveau"}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"email": email}, nil
+}
+
+// setEmail changes the address a lost password can be recovered through. An
+// account keeps one: it may be changed, not removed.
 func (s *Server) setEmail(w http.ResponseWriter, r *http.Request) (any, error) {
 	var body struct {
 		Email    string `json:"email"`
@@ -57,7 +146,7 @@ func (s *Server) setEmail(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, err
 	}
 	email := strings.TrimSpace(body.Email)
-	if email != "" && !validEmail(email) {
+	if !validEmail(email) {
 		return nil, bad("Cette adresse e-mail n'est pas valable")
 	}
 	err = s.store.SetEmail(r.Context(), u.ID, email)
@@ -67,7 +156,15 @@ func (s *Server) setEmail(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{"email": email}, nil
+	// Another address is to be confirmed again.
+	fresh, err := s.store.User(r.Context(), u.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !fresh.EmailChecked {
+		s.sendCheck(r, fresh)
+	}
+	return map[string]any{"email": email, "emailChecked": fresh.EmailChecked}, nil
 }
 
 // setPassword changes the password and closes the other sessions.
@@ -97,8 +194,9 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request) (any, error
 }
 
 // forgot sends a link to choose a new password to the address of the account
-// a pseudo or an address names. It answers the same whether the account
-// exists, has an address, or not: it must not tell who plays here.
+// a pseudo or an address names, once that address is confirmed. It answers
+// the same whether the account exists, has such an address, or not: it must
+// not tell who plays here.
 func (s *Server) forgot(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := s.throttleAuth(r); err != nil {
 		return nil, err
@@ -110,14 +208,7 @@ func (s *Server) forgot(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, err
 	}
 	who := strings.TrimSpace(body.Name)
-	base := s.cfg.PublicURL
-	if base == "" {
-		scheme := "http"
-		if s.secure(r) {
-			scheme = "https"
-		}
-		base = scheme + "://" + r.Host
-	}
+	base := s.baseURL(r)
 	// The message leaves after the answer: how long it takes must not tell
 	// whether there was one to send.
 	go func() {
@@ -132,17 +223,16 @@ func (s *Server) forgot(w http.ResponseWriter, r *http.Request) (any, error) {
 		} else {
 			return
 		}
-		if err != nil || u.Email == "" {
+		// An address nobody confirmed may be someone else's: nothing goes there.
+		if err != nil || u.Email == "" || !u.EmailChecked {
 			return
 		}
-		raw := make([]byte, 32)
-		rand.Read(raw)
-		token := hex.EncodeToString(raw)
+		token := newToken()
 		if err := s.store.CreateReset(ctx, u.ID, tokenHash(token), time.Now().Add(resetLife)); err != nil {
 			s.log.Error("create reset", "err", err)
 			return
 		}
-		link := strings.TrimRight(base, "/") + "/reinitialiser/?t=" + token
+		link := base + "/reinitialiser/?t=" + token
 		text := "Bonjour " + u.Name + ",\n\n" +
 			"Quelqu'un a demandé à choisir un nouveau mot de passe pour votre compte lab.bingo games. Si c'est vous, ouvrez ce lien, valable une heure :\n\n" +
 			link + "\n\n" +

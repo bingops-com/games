@@ -60,27 +60,60 @@ func TestAccountRecovery(t *testing.T) {
 	c := player(t, ts, "Bing")
 	guest := player(t, ts, "")
 
-	// An address is set with the password, and only a valid one.
+	// Each account is mailed a link to confirm the address it gave.
+	linkIn := func(mail []string, to, path string) string {
+		t.Helper()
+		for i := len(mail) - 1; i >= 0; i-- {
+			if j := strings.Index(mail[i], "https://games.example"+path+"?t="); j >= 0 && strings.HasPrefix(mail[i], to+"\n") {
+				return strings.Fields(mail[i][j+len("https://games.example"+path+"?t="):])[0]
+			}
+		}
+		t.Fatalf("no %s link sent to %s in %d messages", path, to, len(mail))
+		return ""
+	}
+	if got := c.want(200, "GET", "/api/me", "")["user"].(map[string]any)["emailChecked"]; got != false {
+		t.Fatalf("a new address is confirmed: %v", got)
+	}
+
+	// An address is changed with the password, to a valid one, and never removed.
 	c.want(403, "POST", "/api/account/email", `{"email":"bing@example.org","password":"wrong"}`)
 	c.want(400, "POST", "/api/account/email", `{"email":"not an address","password":"long enough"}`)
+	c.want(400, "POST", "/api/account/email", `{"email":"","password":"long enough"}`)
 	c.want(200, "POST", "/api/account/email", `{"email":"bing@example.org","password":"long enough"}`)
 	if got := c.want(200, "GET", "/api/me", "")["user"].(map[string]any)["email"]; got != "bing@example.org" {
 		t.Fatalf("email = %v", got)
 	}
 	ana := player(t, ts, "Ana")
 	ana.want(409, "POST", "/api/account/email", `{"email":"BING@example.org","password":"long enough"}`)
-	ana.want(200, "POST", "/api/account/email", `{"email":"","password":"long enough"}`)
+	// Three links so far: Bing's first address, his second one, Ana's.
+	sent := len(box.wait(t, 3))
 
 	// Asking for a link answers the same for an account, an unknown pseudo and
-	// an account without an address; only the first gets mail.
+	// an account whose address is not confirmed; nothing is sent before Bing
+	// opens the link sent to his address.
 	guest.want(200, "POST", "/api/forgot", `{"name":"Nobody"}`)
 	guest.want(200, "POST", "/api/forgot", `{"name":"Ana"}`)
 	guest.want(200, "POST", "/api/forgot", `{"name":"bing"}`)
-	mail := box.wait(t, 1)
-	time.Sleep(100 * time.Millisecond)
-	if n := len(box.wait(t, 1)); n != 1 {
-		t.Fatalf("%d messages for one account with an address", n)
+	time.Sleep(150 * time.Millisecond)
+	if n := len(box.wait(t, sent)); n != sent {
+		t.Fatalf("%d messages sent to addresses nobody confirmed", n-sent)
 	}
+	guest.want(410, "POST", "/api/confirm", `{"token":"`+strings.Repeat("0", 64)+`"}`)
+	guest.want(200, "POST", "/api/confirm", `{"token":"`+linkIn(box.wait(t, sent), "bing@example.org", "/confirmer/")+`"}`)
+	if got := c.want(200, "GET", "/api/me", "")["user"].(map[string]any)["emailChecked"]; got != true {
+		t.Fatalf("after the link: emailChecked = %v", got)
+	}
+	c.want(400, "POST", "/api/account/email/check", "")
+	ana.want(200, "POST", "/api/account/email/check", "")
+	sent = len(box.wait(t, sent+1))
+	guest.want(200, "POST", "/api/forgot", `{"name":"Ana"}`)
+	guest.want(200, "POST", "/api/forgot", `{"name":"bing"}`)
+	mail := box.wait(t, sent+1)
+	time.Sleep(100 * time.Millisecond)
+	if n := len(box.wait(t, sent+1)); n != sent+1 {
+		t.Fatalf("%d messages for one account with a confirmed address", n-sent)
+	}
+	mail = mail[len(mail)-1:]
 	if !strings.HasPrefix(mail[0], "bing@example.org\n") {
 		t.Fatalf("sent to %q", mail[0][:30])
 	}
