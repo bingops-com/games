@@ -1,0 +1,9 @@
+# Restored from skills-lock.json; project skills written here are tracked.
+.agents/skills/frontend-design/
+/bin/
+web/node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+.env
+web/tsconfig.tsbuildinfo

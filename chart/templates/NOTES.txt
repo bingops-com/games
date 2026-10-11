@@ -1,0 +1,13 @@
+games is deployed as {{ include "games.fullname" . }} in namespace {{ .Release.Namespace }}.
+{{- if .Values.ingress.enabled }}
+It answers on https://{{ .Values.ingress.host }}
+{{- else }}
+No ingress was created. To look at it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "games.fullname" . }} 3778:{{ .Values.service.port }}
+{{- end }}
+{{- if .Values.database.cnpg.enabled }}
+The database is the CloudNativePG cluster {{ include "games.postgresql" . }}; it is kept when the release is uninstalled.
+{{- if not .Values.database.cnpg.backup.enabled }}
+It is NOT backed up: accounts and friends live only on its volume. Set database.cnpg.backup to archive it.
+{{- end }}
+{{- end }}

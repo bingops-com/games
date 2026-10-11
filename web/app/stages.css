@@ -1,0 +1,3204 @@
+/* Les scènes de jeu. Chacune se joue sur un panneau bleu ; les couleurs propres à un jeu
+   (les quatre couleurs des cartes, bâbord et tribord, le feu) sont des jetons qui ne
+   servent qu'ici. */
+
+:root {
+  --corail: #ff6b5e;
+  --sable: #ffcf3f;
+  --algue: #1faa6f;
+  --lagon: #14a3c7;
+  --feu: #ffb23e;
+}
+
+/* --- Une partie : la scène prend toute la fenêtre, sans défilement ------------------ */
+
+/* La page est à la hauteur de la fenêtre tant qu'une partie se joue. */
+#app:has(.play) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+#app:has(.play) .main {
+  min-height: 0;
+}
+#app:has(.play) .foot {
+  display: none;
+}
+#app:has(.play) #view {
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  padding: clamp(0.5rem, 1.2vw, 1rem);
+}
+.play {
+  height: 100%;
+}
+.board {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: clamp(0.75rem, 1.5vw, 1.25rem);
+}
+/* La scène d'un jeu occupe ce qui reste et y fait tenir ses pièces. Si la fenêtre est
+   vraiment trop petite, c'est elle qui défile, jamais la page. */
+.board > :nth-child(2) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden auto;
+}
+.board-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.board-bar b {
+  font: 900 1.15rem/1 var(--display);
+}
+.board-bar span {
+  opacity: 0.85;
+  font-size: 0.9375rem;
+}
+
+.room-code {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 0;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  color: #fff;
+  text-align: left;
+}
+.room-code:hover {
+  background: var(--veil-strong);
+}
+.room-code small {
+  opacity: 0.85;
+}
+.room-code strong {
+  font: 900 1.75rem/1 var(--display);
+  letter-spacing: 0.12em;
+}
+.room-code span {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  font-size: 0.8125rem;
+  opacity: 0.9;
+}
+.room-code .ic {
+  width: 1rem;
+  height: 1rem;
+}
+.room-toggle {
+  display: none;
+}
+/* Le salon remplit la bande : le code en haut, les joueurs, puis la discussion, qui prend
+   la place qu'il reste ; « Quitter » reste au pied. */
+.room,
+.room-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+}
+.room {
+  height: 100%;
+}
+.room-body {
+  flex: 1;
+}
+.room-body > h2 {
+  padding: 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.room-body > .members {
+  flex: 0 1 auto;
+  min-height: 3.2rem;
+  max-height: 45%;
+  margin-top: -0.3rem;
+  padding: 0 0.4rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--veil-strong) transparent;
+}
+.room-body > .chat {
+  flex: 1 1 11rem;
+  min-height: 11rem;
+  padding: 0.7rem 0.4rem 0;
+  border-top: 1px solid var(--veil-strong);
+}
+.room-leave {
+  flex: none;
+  width: 100%;
+}
+/* Sur un grand écran, avant la partie, les joueurs sont dans la salle d'attente : la bande
+   ne les répète pas. */
+@media (min-width: 56.0625rem) {
+  .room.waiting .room-body > h2,
+  .room.waiting .members {
+    display: none;
+  }
+}
+
+/* Les réglages de la partie, sur la carte du jeu choisi. */
+.settings {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r);
+  background: var(--tint);
+  font-size: 0.9375rem;
+}
+.settings label {
+  font: inherit;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(6rem, 11rem) 3.75rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.settings output {
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-read {
+  margin-top: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* --- Avant la partie : la salle d'attente ------------------------------------------ */
+
+/* Le jeu choisi en grand sur du papier, les joueurs et l'invitation à côté, et en bas de
+   quoi changer de jeu. */
+.lobby {
+  display: grid;
+  grid-template: minmax(0, 1fr) auto / minmax(0, 1fr) minmax(17rem, 23rem);
+  gap: clamp(0.6rem, 1.6vh, 1rem);
+}
+.lobby-game {
+  container-type: inline-size;
+  display: grid;
+  grid-template: minmax(0, 1fr) auto / auto minmax(0, 1fr);
+  gap: clamp(0.75rem, 2vh, 1.25rem) clamp(1rem, 2vw, 1.75rem);
+  min-height: 0;
+  padding: clamp(1rem, 2.6vh, 1.75rem) clamp(1rem, 2vw, 1.75rem);
+  border-radius: var(--r-panel);
+  background: #fff;
+  color: var(--ink);
+}
+/* Les dessins sont blancs : sur le papier, le jeu choisi garde sa tuile de mer. */
+.lobby-art {
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: clamp(4.5rem, 19vh, 9.5rem);
+  aspect-ratio: 1;
+  border-radius: var(--r-panel);
+  background: var(--sea-fill);
+}
+.lobby-art .art {
+  width: 92%;
+}
+.lobby-what {
+  min-height: 0;
+  overflow-y: auto;
+}
+.lobby-kicker {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.lobby-what h1 {
+  color: var(--navy);
+  font-size: clamp(2rem, 7.5vh, 4.25rem);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.lobby-pitch {
+  margin-top: 0.6rem;
+  max-width: 34rem;
+  font-size: clamp(1rem, 2.4vh, 1.2rem);
+}
+.lobby-facts {
+  margin-top: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.lobby-rules {
+  display: none;
+  color: var(--sea);
+}
+.lobby-rules-list {
+  margin-top: 0.9rem;
+  max-width: 38rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+.lobby-rules-list li {
+  padding-block: 0.5rem;
+}
+.lobby-rules-list li + li {
+  border-color: var(--line);
+}
+/* Carte large : le dessin devient la couverture du jeu, sur toute la hauteur de la carte. */
+@container (min-width: 58rem) {
+  .lobby-art {
+    align-self: stretch;
+    width: auto;
+    height: 100%;
+    max-width: 46cqw;
+  }
+  .lobby-art .art {
+    width: min(90%, 36rem);
+  }
+  .lobby-what h1 {
+    font-size: clamp(2rem, 9vh, 5.5rem);
+  }
+  .lobby-pitch {
+    font-size: clamp(1rem, 2.4vh, 1.35rem);
+  }
+  .lobby-rules-list {
+    font-size: 1rem;
+  }
+}
+/* Le jeu vient d'être choisi : sa carte se pose. */
+.lobby-art,
+.lobby-what {
+  animation: settle 0.35s var(--ease) backwards;
+}
+.lobby-art {
+  animation-name: settle-art;
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes settle-art {
+  from {
+    opacity: 0;
+    transform: scale(0.88) rotate(-4deg);
+  }
+}
+
+/* La partie peut être lancée : le bouton le fait savoir une fois. */
+@keyframes ready {
+  from {
+    box-shadow: 0 0 0 0 rgb(20 67 214 / 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 14px rgb(20 67 214 / 0);
+  }
+}
+.lobby-go .btn.primary:not(:disabled) {
+  animation: ready 0.9s ease-out 2;
+}
+.lobby-go {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding-top: clamp(0.75rem, 2vh, 1.25rem);
+  border-top: 1px solid var(--line);
+}
+.lobby-hint {
+  font-weight: 700;
+}
+.lobby-hint.ok {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+/* À côté du jeu choisi : qui est là, de quoi inviter, et la discussion, qui prend la place
+   qu'il reste. */
+.lobby-crew {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+}
+.lobby-crew > h2,
+.lobby-switch h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.lobby-crew > .members {
+  flex: 0 1 auto;
+  min-height: 3.2rem;
+  max-height: 38%;
+  margin-top: -0.35rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--veil-strong) transparent;
+}
+.lobby-played {
+  margin-top: -0.4rem;
+  font-size: 0.875rem;
+  opacity: 0.85;
+}
+.lobby-invite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+.lobby-invite .check {
+  font-size: inherit;
+  line-height: 1.35;
+}
+/* Les places du salon : un moins, le nombre, un plus. */
+.lobby-limit {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.lobby-limit > span {
+  margin-right: auto;
+}
+.lobby-limit b {
+  min-width: 1.6rem;
+  font: 900 1.15rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.lobby-limit .btn {
+  width: 1.9rem;
+  height: 1.9rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+.lobby-limit small {
+  flex-basis: 100%;
+  margin-top: -0.3rem;
+  font-size: 0.8125rem;
+  text-align: right;
+  opacity: 0.8;
+}
+.lobby-limit {
+  flex-wrap: wrap;
+}
+.invite-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+/* L'adresse du salon, dans un creux : on la lit, on la sélectionne d'un clic. */
+.invite-link {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--r);
+  background: var(--hollow);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+.lobby-crew > .chat {
+  flex: 1 1 9rem;
+  min-height: 9rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--veil-strong);
+}
+
+.lobby-switch {
+  grid-column: 1 / -1;
+}
+.picker {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: clamp(0.4rem, 0.8vw, 0.6rem);
+  margin-top: 0.45rem;
+}
+.pick-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem 0.4rem;
+  border: 3px solid transparent;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  color: #fff;
+  text-align: center;
+  transition: background 0.2s, border-color 0.2s, transform 0.12s;
+}
+.pick-game:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.pick-game:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.pick-game:not(:disabled):hover {
+  background: var(--veil-strong);
+}
+.pick-game .art {
+  width: 2.5rem;
+  margin-bottom: 0.1rem;
+}
+.pick-game b {
+  font: 800 1rem/1.15 var(--display);
+}
+.pick-game small {
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  opacity: 0.85;
+}
+/* Le jeu ne convient pas au nombre de joueurs présents : la tuile s'efface et dit pourquoi. */
+.pick-game:has(small.no):not(.on) {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--veil-strong);
+}
+/* Menthe : « celui-ci », le jeu choisi. */
+.pick-game.on {
+  border-color: var(--mint);
+  background: var(--veil-strong);
+}
+/* Fenêtre basse : les règles s'ouvrent d'un lien, la carte garde l'essentiel. */
+@media (max-height: 44rem) {
+  .lobby-rules {
+    display: inline;
+  }
+  .lobby-rules-list {
+    display: none;
+  }
+}
+
+.board-tools {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 0 auto !important;
+  opacity: 1 !important;
+}
+.notice.lost {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  z-index: 15;
+  transform: translateX(-50%);
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+}
+.seats-field {
+  margin-top: 1.5rem;
+}
+.btn.white {
+  background: #fff;
+  color: var(--navy);
+}
+.btn.white:hover:not(:disabled) {
+  background: var(--white-hover);
+}
+.board .disc {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  border: 0;
+  background: #fff;
+  color: var(--navy);
+  font: 900 1.2rem/1 var(--display);
+}
+/* La fin de partie se pose par-dessus la scène, qui reste visible derrière. */
+.board {
+  position: relative;
+}
+.outcome {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  border-radius: inherit;
+  background: rgb(8 28 102 / 0.72);
+  flex: none !important;
+  overflow: visible !important;
+}
+.outcome-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 30rem;
+  padding: clamp(1.5rem, 4vh, 2.5rem) clamp(1.5rem, 4vw, 3rem);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  text-align: center;
+  animation: pop 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+.outcome-card .art {
+  width: 6.5rem;
+}
+.after {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.after span:first-child {
+  color: var(--ink);
+  font-weight: 700;
+}
+.after .bar {
+  color: var(--sea);
+}
+.after .as-link {
+  color: var(--sea);
+}
+.outcome-card strong {
+  color: var(--navy);
+  font: 900 clamp(1.75rem, 5vh, 2.75rem) / 1.1 var(--display);
+  letter-spacing: -0.02em;
+}
+.outcome-card .row-actions {
+  justify-content: center;
+  align-items: center;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+}
+
+/* Le bandeau : ce qui se passe et ce qu'il y a à faire. Blanc quand c'est à vous. */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+}
+.guide strong {
+  font: 900 clamp(1.05rem, 2.2vh + 0.4rem, 1.35rem) / 1.2 var(--display);
+  letter-spacing: -0.01em;
+}
+.guide span {
+  max-width: 62rem;
+  opacity: 0.92;
+}
+.guide-you {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: inset 0 0 0 3px var(--mint);
+}
+.guide-you span {
+  color: var(--ink);
+  opacity: 1;
+}
+.guide-alert {
+  background: var(--veil-strong);
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.steps .row-actions {
+  margin-top: 0.4rem;
+}
+.outcome strong {
+  font: 900 1.5rem/1.2 var(--display);
+  letter-spacing: -0.02em;
+}
+
+/* --- Ono -------------------------------------------------------------- */
+
+.card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--card, 4.25rem);
+  aspect-ratio: 5 / 7;
+  border: 3px solid #fff;
+  border-radius: var(--r);
+  background: var(--navy);
+  color: #fff;
+  font: 900 calc(var(--card, 4.25rem) * 0.46) / 1 var(--display);
+}
+.card-corail {
+  background: var(--corail);
+}
+.card-sable {
+  background: var(--sable);
+  color: var(--navy);
+}
+.card-algue {
+  background: var(--algue);
+}
+.card-lagon {
+  background: var(--lagon);
+}
+.card-back {
+  background: var(--navy) radial-gradient(#fff 1.5px, transparent 2px) 0 0 / 0.7rem 0.7rem;
+}
+.card .suit {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.3rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  fill: currentColor;
+}
+.card .figure svg {
+  display: block;
+  width: calc(var(--card, 4.25rem) * 0.56);
+}
+.terre {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1.4vh, 1rem);
+  /* Les cartes se règlent sur la hauteur de la fenêtre. */
+  --card: clamp(2.6rem, 9.5vh, 4.5rem);
+}
+/* La table prend la hauteur qui reste. Petite, elle range les joueurs sur une ligne au-dessus
+   de la pioche ; assez grande, c'est un ovale avec les joueurs assis autour. */
+.ono-table {
+  position: relative;
+  flex: 1;
+  min-height: 9rem;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 1.4vh, 1rem);
+  container: ono / size;
+}
+.ono-top {
+  display: none;
+}
+/* La pioche et la carte du dessus prennent la hauteur qui reste, sans jamais passer
+   sous la ligne suivante. */
+.terre .pile {
+  flex: 1;
+  min-height: 5.5rem;
+  container-type: size;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.terre .deck {
+  --card: clamp(1.9rem, 36cqh, 4.5rem);
+}
+.terre .guide {
+  margin-bottom: 0;
+}
+.card .caption {
+  position: absolute;
+  bottom: 0.2rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 700 calc(var(--card, 4.25rem) * 0.15) / 1 var(--body);
+}
+.card:has(.caption) .figure {
+  margin-bottom: 18%;
+}
+.deck small {
+  font-weight: 400;
+  opacity: 0.85;
+}
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+}
+.timer-bar {
+  width: 8rem;
+  height: 0.5rem;
+  border-radius: var(--r-pill);
+  background: var(--veil-strong);
+  overflow: hidden;
+}
+.timer-bar span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transition: width 0.25s linear;
+}
+.story {
+  padding: 0.6rem 0.9rem;
+  border-left: 3px solid #fff;
+  background: var(--veil);
+  border-radius: 0 8px 8px 0;
+  font-weight: 500;
+}
+/* Sur la table d'Ono, le récit du dernier coup est une ligne discrète, au milieu. */
+.terre .story {
+  align-self: center;
+  padding: 0.3rem 1rem;
+  border: 0;
+  border-radius: var(--r-pill);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+.terre .mine .row-actions {
+  justify-content: center;
+}
+.terre .pick {
+  justify-content: center;
+}
+.hand-title {
+  font: 800 1.05rem/1.2 var(--display);
+}
+.rivals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.rival {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.6rem;
+  min-width: 10rem;
+  padding: 0.4rem 0.9rem 0.4rem 0.5rem;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+}
+.rival-who {
+  grid-row: span 2;
+  display: flex;
+  align-items: flex-end;
+}
+.rival .avatar {
+  width: 2.75rem;
+}
+/* La main d'un adversaire : des dos de cartes en éventail. Sur la ligne, le compte suffit. */
+.rival-fan {
+  display: none;
+}
+.rival-fan i {
+  display: block;
+  width: clamp(1.05rem, 6.5cqh, 1.7rem);
+  aspect-ratio: 5 / 7;
+  margin-inline: -0.3rem;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  background: var(--navy);
+  transform: rotate(calc(var(--k) * 9deg)) translateY(calc(var(--k) * var(--k) * 0.045rem));
+  transform-origin: 50% 120%;
+}
+.rival-name {
+  font-weight: 700;
+}
+.rival-count {
+  grid-column: 2;
+  opacity: 0.85;
+  font-size: 0.9375rem;
+}
+.rival .btn {
+  grid-column: 1 / -1;
+  margin-top: 0.5rem;
+}
+/* Menthe : « celui-ci », le joueur dont c'est le tour. Un halo suit la forme de l'avatar,
+   et son nom passe sur une étiquette. */
+.rival.turn .avatar,
+.bomber.turn .avatar {
+  filter: drop-shadow(0 0 0.2rem var(--mint)) drop-shadow(0 0 0.5rem var(--mint));
+}
+.rival.turn .rival-name,
+.bomber.turn .bomber-name {
+  padding: 0.05rem 0.55rem;
+  border-radius: var(--r-pill);
+  background: var(--mint);
+  color: var(--navy);
+}
+.rival.turn .avatar {
+  animation: nod 1.4s ease-in-out infinite;
+}
+@keyframes nod {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.rival.out,
+.bomber.out {
+  opacity: 0.5;
+}
+.ono-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+.ono-dir svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+/* Votre place et les effets n'existent que sur la table ovale. */
+.rival.me,
+.ono-fx,
+.seat-timer {
+  display: none;
+}
+/* La carte posée arrive du siège de son joueur, en tournant. */
+.top {
+  position: relative;
+}
+.top-card {
+  position: relative;
+  display: block;
+  transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg));
+  filter: drop-shadow(0 0.35rem 0.6rem rgb(4 16 66 / 0.45));
+  animation: ono-play 0.5s cubic-bezier(0.25, 0.75, 0.3, 1) backwards;
+}
+/* Elle part de la main de son joueur, de biais et presque de profil, se retourne en vol
+   et s'écrase un peu en touchant le tas. */
+@keyframes ono-play {
+  from {
+    opacity: 0.6;
+    transform: translate(var(--fx, 0), var(--fy, -30%)) rotate(-50deg) rotateY(85deg) scale(0.5);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(calc(var(--fx, 0) * 0.12), calc(var(--fy, -30%) * 0.12)) rotate(calc(var(--rot, 0deg) - 14deg)) rotateY(0deg) scale(1.18);
+  }
+  80% {
+    transform: translate(var(--dx, 0), var(--dy, 0)) rotate(var(--rot, 0deg)) scale(0.95);
+  }
+}
+/* Les cartes déjà jouées restent sous celle du dessus, là où elles sont tombées. */
+.top-card.under {
+  position: absolute;
+  inset: 0;
+  filter: brightness(0.82);
+  animation: none;
+}
+/* La couleur demandée change : son étiquette le fait remarquer. */
+.now-color {
+  animation: pop 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) backwards;
+}
+/* Le sens du jeu tourne, dans son sens. */
+.ono-dir svg {
+  animation: ono-spin 5s linear infinite;
+}
+.ono-dir svg.back {
+  animation-direction: reverse;
+  scale: -1 1;
+}
+@keyframes ono-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+/* Un adversaire pioche ou pose : son compte de cartes tressaute. */
+.rival-count {
+  animation: ono-bump 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+@keyframes ono-bump {
+  from {
+    transform: scale(1.35);
+  }
+}
+/* Votre main se distribue, et chaque carte piochée la rejoint. */
+.hand li {
+  animation: ono-deal 0.32s cubic-bezier(0.2, 0.8, 0.25, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+@keyframes ono-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-1.5rem) rotate(-8deg);
+  }
+}
+
+/* La table ovale, dès qu'elle a un peu de place : la pioche au milieu, les joueurs assis sur
+   son bord, vous en bas. Tout s'y règle sur sa taille, du téléphone au grand écran. */
+@container ono (min-height: 13rem) and (min-width: 18rem) {
+  .ono-top {
+    display: block;
+    position: absolute;
+    inset: 14% 6% 9%;
+    border-radius: 50%;
+    background: var(--veil);
+    overflow: hidden;
+    /* Le bord de la table prend la couleur demandée. */
+    box-shadow: inset 0 0 0 0.3rem color-mix(in srgb, var(--glow) 75%, transparent), inset 0 0 4rem color-mix(in srgb, var(--glow) 30%, transparent);
+    transition: box-shadow 0.45s;
+  }
+  .glow-corail {
+    --glow: var(--corail);
+  }
+  .glow-sable {
+    --glow: var(--sable);
+  }
+  .glow-algue {
+    --glow: var(--algue);
+  }
+  .glow-lagon {
+    --glow: var(--lagon);
+  }
+  /* Les rhumbs d'une carte marine, au même niveau que le semis de points. */
+  .ono-top::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.09;
+    background: repeating-conic-gradient(#fff 0 0.35deg, transparent 0.35deg 22.5deg);
+  }
+  .rivals {
+    display: contents;
+  }
+  .rival,
+  .rival.me {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: clamp(4.25rem, 17cqw, 9.5rem);
+    min-width: 0;
+    padding: 0;
+    background: none;
+    font-size: clamp(0.75rem, 0.55rem + 0.7cqw, 1rem);
+    text-align: center;
+    transform: translate(-50%, -50%);
+  }
+  /* Vous : en ligne, au ras du bas de la table, pour laisser la place à votre main. */
+  .rival.me {
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.4rem;
+    width: auto;
+    transform: translate(-50%, -100%);
+  }
+  .rival.me .avatar {
+    width: clamp(1.9rem, 11cqh, 3rem);
+  }
+  .rival.me .rival-who {
+    padding: 0;
+  }
+  .rival.me .seat-timer {
+    position: absolute;
+    inset: auto 0 -0.4rem;
+    width: auto;
+  }
+  .rival-who {
+    position: relative;
+    justify-content: center;
+    padding-inline: 1.1em;
+  }
+  .rival .avatar {
+    width: clamp(2rem, min(19cqh, 9cqw), 5.25rem);
+  }
+  .rival-fan {
+    position: absolute;
+    left: 50%;
+    bottom: -0.35rem;
+    display: flex;
+    transform: translateX(-50%);
+  }
+  .rival-name {
+    max-width: 100%;
+    margin-top: 0.45em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rival-count {
+    font-size: 0.85em;
+  }
+  .rival .btn {
+    margin-top: 0.25rem;
+  }
+  /* Le temps qui reste au joueur dont c'est le tour, sous son nom. */
+  .seat-timer {
+    display: block;
+    width: 80%;
+    height: 0.3rem;
+    margin-top: 0.25rem;
+    border-radius: var(--r-pill);
+    background: var(--veil-strong);
+    overflow: hidden;
+  }
+  .seat-timer i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--mint);
+    transition: width 0.25s linear;
+  }
+  .terre .pile {
+    position: absolute;
+    left: 50%;
+    top: 52%;
+    width: 60%;
+    height: 46%;
+    flex: none;
+    min-height: 0;
+    overflow: visible;
+    transform: translate(-50%, -50%);
+  }
+  .ono-fx {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+  /* Une carte spéciale s'annonce : une onde de la couleur demandée part du tas, et ce que
+     la carte fait s'écrit en grand un instant. */
+  .ono-burst {
+    position: absolute;
+    left: 50%;
+    top: 52%;
+    width: 30cqh;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 0.5rem solid var(--glow, #fff);
+    opacity: 0;
+    translate: -50% -50%;
+    animation: ono-burst 0.8s 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  }
+  @keyframes ono-burst {
+    from {
+      opacity: 0.9;
+      scale: 0.5;
+    }
+    to {
+      opacity: 0;
+      scale: 3.4;
+      border-width: 0.1rem;
+    }
+  }
+  .ono-call {
+    position: absolute;
+    left: 50%;
+    top: 52%;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font: 900 clamp(2.5rem, 34cqh, 8rem) / 1 var(--display);
+    letter-spacing: -0.04em;
+    text-shadow: 0 0.06em 0 var(--navy), 0 0 0.5em rgb(4 16 66 / 0.6);
+    translate: -50% -50%;
+    opacity: 0;
+    animation: ono-call 1.2s 0.3s cubic-bezier(0.2, 1.3, 0.4, 1) forwards;
+  }
+  .ono-call svg {
+    width: 1em;
+    filter: drop-shadow(0 0.06em 0 var(--navy));
+  }
+  .ono-call.call-rev svg {
+    animation: ono-turn 0.9s 0.3s cubic-bezier(0.3, 0, 0.2, 1) both;
+  }
+  .ono-call.back svg {
+    animation-direction: reverse;
+  }
+  @keyframes ono-call {
+    from {
+      opacity: 0;
+      scale: 0.3;
+    }
+    18%,
+    70% {
+      opacity: 1;
+      scale: 1;
+    }
+    to {
+      opacity: 0;
+      scale: 1.5;
+    }
+  }
+  @keyframes ono-turn {
+    to {
+      rotate: 360deg;
+    }
+  }
+  /* Celui qui reçoit des cartes encaisse. */
+  .rival.hit .rival-who {
+    animation: ono-hit 0.5s 0.35s cubic-bezier(0.3, 0, 0.3, 1) both;
+  }
+  @keyframes ono-hit {
+    20% {
+      transform: translateX(-0.45rem) rotate(-7deg);
+    }
+    45% {
+      transform: translateX(0.4rem) rotate(6deg);
+    }
+    70% {
+      transform: translateX(-0.2rem) rotate(-3deg);
+    }
+  }
+  /* Une carte piochée part de la pioche vers son joueur. */
+  .ono-fly {
+    --card: clamp(1.6rem, 15cqh, 3.4rem);
+    box-shadow: 0 0.3rem 0.6rem rgb(4 16 66 / 0.4);
+    position: absolute;
+    left: 42%;
+    top: 52%;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    animation: ono-draw 0.55s var(--d, 0ms) cubic-bezier(0.3, 0.1, 0.3, 1) forwards;
+  }
+  @keyframes ono-draw {
+    from {
+      left: 42%;
+      top: 52%;
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    40% {
+      scale: 1.2;
+      rotate: -14deg;
+    }
+    to {
+      left: var(--x);
+      top: var(--y);
+      opacity: 0;
+      scale: 0.7;
+      rotate: 12deg;
+    }
+  }
+  /* Ce qui arrive à un joueur, écrit un instant au-dessus de sa place. */
+  .ono-badge {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    padding: 0.2em 0.7em;
+    border-radius: var(--r-pill);
+    background: #fff;
+    color: var(--navy);
+    font: 900 clamp(0.9rem, 0.6rem + 1.4cqw, 1.6rem) / 1.2 var(--display);
+    white-space: nowrap;
+    transform: translate(-50%, -150%);
+    animation: ono-badge 1.6s cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
+  }
+  @keyframes ono-badge {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -60%) scale(0.4);
+    }
+    14%,
+    75% {
+      opacity: 1;
+      transform: translate(-50%, -150%) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translate(-50%, -190%) scale(0.9);
+    }
+  }
+}
+/* Table étroite (téléphone) : plus d'éventail ni de légende sous la pioche, le compte suffit. */
+@container ono (max-width: 34rem) {
+  .rival-fan,
+  .deck small,
+  .ono-dir {
+    display: none;
+  }
+  .rival-who {
+    padding-inline: 0;
+  }
+  .terre .pile {
+    width: 64%;
+    gap: 0.5rem;
+  }
+  /* La pioche se reconnaît à son dos de carte ; son nom et le compte à rebours écrit
+     laisseraient trop peu de place aux joueurs. */
+  .deck > span:not(.card) {
+    display: none;
+  }
+  .turn-info {
+    font-size: 0.75rem;
+  }
+  .now-color {
+    padding: 0.1rem 0.45rem;
+    white-space: nowrap;
+  }
+  .timer {
+    flex-wrap: nowrap;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  .timer-bar {
+    width: 2.5rem;
+  }
+  .rival-count {
+    font-size: 0.7rem;
+  }
+  /* Les places des côtés restent dans la table, et le temps se lit sous le joueur. */
+  .rival {
+    left: clamp(2.3rem, var(--x), calc(100% - 2.3rem));
+  }
+  /* La couleur demandée se lit sur la carte du dessus et sur le bord de la table. */
+  .terre .turn-info {
+    display: none;
+  }
+}
+.pile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem 2rem;
+  padding: 0;
+}
+.pile .top {
+  --card: clamp(2.9rem, 64cqh, 7rem);
+}
+.deck {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-weight: 700;
+}
+.deck:not(:disabled):hover .card {
+  transform: translateY(-4px);
+}
+/* La pioche a de l'épaisseur : deux cartes dépassent dessous. */
+.deck .card {
+  margin-bottom: 0.5rem;
+  box-shadow: 0 0.2rem 0 -1px var(--navy), 0 0.2rem 0 1px #fff, 0 0.45rem 0 -1px var(--navy), 0 0.45rem 0 1px #fff, 0 0.8rem 1rem rgb(4 16 66 / 0.4);
+  transition: transform 0.15s;
+}
+/* Rien ne se pose : la pioche se signale. */
+.deck.must .card {
+  animation: ono-must 1.1s ease-in-out infinite;
+}
+@keyframes ono-must {
+  50% {
+    transform: translateY(-0.4rem) rotate(-3deg);
+  }
+}
+.turn-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.turn-info b {
+  font: 900 1.4rem/1.2 var(--display);
+}
+.turn-info span {
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+}
+.now-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  opacity: 1 !important;
+}
+.now-color .suit,
+.pick-color .suit {
+  width: 0.75rem;
+  height: 0.75rem;
+  fill: currentColor;
+}
+.mine .row-actions {
+  align-items: center;
+  min-height: 2.25rem;
+  margin-bottom: 0.4rem;
+}
+.said {
+  font-weight: 700;
+}
+.btn.say {
+  box-shadow: 0 0 0 3px var(--mint);
+}
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+.pick-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-color: #fff;
+  color: #fff;
+}
+.pick-color.card-sable {
+  color: var(--navy);
+}
+/* Votre main, en éventail au bord de la table : les cartes se recouvrent, celle qu'on
+   survole se redresse et sort du lot. */
+.hand {
+  display: flex;
+  justify-content: safe center;
+  padding: 1.9rem 1.5rem 0.9rem;
+  /* Une main énorme sur un petit écran défile dans sa rangée, pas la page. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.hand li {
+  position: relative;
+  flex: 0 1 calc(var(--card) * 0.74);
+  min-width: 1.15rem;
+  transform: rotate(calc(var(--k, 0) * var(--spread, 0deg)));
+  transform-origin: 50% 160%;
+  transition: transform 0.25s var(--ease), flex-basis 0.25s var(--ease);
+}
+.hand li:last-child {
+  flex: none;
+}
+.hand li:hover,
+.hand li:focus-within {
+  z-index: 2;
+}
+.card-btn {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  transition: transform 0.18s var(--ease);
+}
+.card-btn .card {
+  box-shadow: 0 0.25rem 0.6rem rgb(4 16 66 / 0.35);
+  transition: box-shadow 0.18s, filter 0.18s;
+}
+/* Hors de votre tour, la main reste lisible ; à votre tour, ce qui ne se pose pas s'efface. */
+.card-btn:disabled {
+  opacity: 1;
+}
+.hand.choosing .card-btn:disabled .card {
+  filter: saturate(0.3) brightness(0.62);
+}
+.card-btn.ok {
+  transform: translateY(-0.7rem);
+}
+.hand.choosing .card-btn.ok .card {
+  box-shadow: 0 0 0 2px #fff, 0 0.5rem 1.1rem rgb(4 16 66 / 0.5);
+}
+.card-btn.ok:hover,
+.card-btn.ok:focus-visible,
+.card-btn.picked {
+  transform: translateY(-1.6rem) rotate(calc(var(--k, 0) * var(--spread, 0deg) * -1)) scale(1.08);
+}
+
+/* --- Codenoms ----------------------------------------------------------------- */
+
+.side-babord {
+  --side: var(--corail);
+}
+.side-tribord {
+  --side: var(--algue);
+}
+.mark {
+  width: 0.8em;
+  height: 0.8em;
+  flex: none;
+  fill: currentColor;
+}
+.pav-team small {
+  font: 500 0.9375rem/1.2 var(--body);
+}
+.pav-told {
+  opacity: 0.9;
+}
+.pav-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.25rem;
+  margin-top: 0.6rem;
+  font-size: 0.9375rem;
+}
+.pav-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pav-legend .mark {
+  fill: var(--side, #fff);
+}
+.pav-sides,
+.pav-score {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.pav-side,
+.pav-team {
+  padding: 1rem 1.1rem;
+  border-top: 5px solid var(--side);
+  border-radius: var(--r-tile);
+  background: var(--veil);
+}
+.pav-side h2,
+.pav-team b {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: 900 1.3rem/1.2 var(--display);
+}
+.pav-side .mark,
+.pav-team .mark,
+.pav-log .mark {
+  fill: var(--side);
+}
+.pav-side ul {
+  margin: 0.75rem 0 1rem;
+}
+.pav-side li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 1rem;
+  padding-block: 0.35rem;
+}
+.pav-side li span {
+  opacity: 0.85;
+}
+.pav-begin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.25rem;
+}
+.pav-team {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 1rem;
+  padding-block: 0.7rem;
+}
+.pav-team.turn {
+  background: var(--veil-strong);
+  box-shadow: 0 0 0 2px var(--mint);
+}
+.pav-now {
+  min-height: 3.25rem;
+  margin: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.pav-now p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  font-size: 1.125rem;
+}
+.pav-now strong {
+  font: 900 1.75rem/1 var(--display);
+}
+.clue-word {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pav-clue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+.pav-clue label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.pav-clue input,
+.pav-clue select {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--ink);
+}
+.pav-clue select {
+  width: 5.5rem;
+}
+.pav,
+.pav-teams {
+  display: flex;
+  flex-direction: column;
+}
+.pav-grid {
+  flex: 1;
+  min-height: 9.5rem;
+  display: grid;
+  grid-template: repeat(5, minmax(0, 1fr)) / repeat(5, minmax(0, 1fr));
+  gap: clamp(0.25rem, 0.8vh, 0.5rem);
+}
+.pav-grid li {
+  min-height: 0;
+}
+.word {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.2rem 0.3rem;
+  border: 3px solid transparent;
+  border-radius: var(--r);
+  background: #fff;
+  color: var(--navy);
+  font: 800 clamp(0.72rem, 1.55vw, 1.05rem) / 1.15 var(--display);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.word:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.word:not(:disabled):hover {
+  background: var(--white-hover);
+}
+.word .mark {
+  position: absolute;
+  top: 0.3rem;
+  left: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+}
+.word small {
+  font: 500 0.7rem/1.2 var(--body);
+  text-transform: none;
+}
+/* Pour qui connaît la grille : un liseré de la couleur du mot. */
+.known .word.is-babord {
+  border-color: var(--corail);
+}
+.known .word.is-tribord {
+  border-color: var(--algue);
+}
+.known .word.is-interdit {
+  border-color: var(--navy);
+  border-style: dashed;
+}
+.word.is-babord .mark {
+  fill: var(--corail);
+}
+.word.is-tribord .mark {
+  fill: var(--algue);
+}
+.word.is-neutre .mark {
+  fill: #8690a3;
+}
+.word.shown {
+  color: #fff;
+  border-color: transparent;
+}
+.word.shown .mark {
+  fill: currentColor;
+}
+.word.shown.is-babord {
+  background: var(--corail);
+}
+.word.shown.is-tribord {
+  background: var(--algue);
+}
+.word.shown.is-neutre {
+  background: rgb(255 255 255 / 0.28);
+}
+.word.shown.is-interdit {
+  background: #081547;
+}
+.pav-log {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1rem;
+  margin-top: 0.4rem;
+  opacity: 0.9;
+}
+.pav-log span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 700;
+}
+
+/* --- BoomParty -------------------------------------------------------------- */
+
+.meche {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* Les joueurs sont sur une ellipse qui prend la place qui reste : large quand la
+   fenêtre est basse, ronde quand elle est haute. */
+.ring-fit {
+  flex: 1;
+  min-height: 12rem;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.ring {
+  position: relative;
+  width: min(100cqw - 9rem, 36rem);
+  height: min(100cqh - 6rem, 30rem);
+  margin-bottom: 3.5rem;
+}
+.bomber .avatar {
+  width: clamp(2.75rem, 13cqh, 4.25rem);
+  transition: transform 0.2s;
+}
+.bomber {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 11rem;
+  transform: translate(-50%, -1.9rem);
+  text-align: center;
+}
+.bomber-name {
+  max-width: 100%;
+  margin-top: 0.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bomber-lives {
+  margin-top: 0.15rem;
+  opacity: 0.9;
+  font-size: 0.8125rem;
+}
+/* Ce que tape celui qui tient la bombe : une bulle, lue par tout le monde. */
+.bomber-typing {
+  position: relative;
+  margin-top: 0.4rem;
+  padding: 0.1rem 0.6rem;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  font: 800 1rem/1.4 var(--display);
+  overflow-wrap: anywhere;
+}
+.bomber-typing::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -0.3rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  background: #fff;
+  transform: translateX(-50%) rotate(45deg);
+}
+/* Celui qui tient la bombe transpire un peu. */
+.bomber.turn .avatar {
+  animation: jitter 0.5s ease-in-out infinite;
+}
+@keyframes jitter {
+  25% {
+    transform: translate(-1px, 1px) rotate(-2deg);
+  }
+  75% {
+    transform: translate(1px, -1px) rotate(2deg);
+  }
+}
+/* Elle vient de lui sauter dans les mains. */
+.bomber.hit .avatar {
+  animation: hit 0.7s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+@keyframes hit {
+  15% {
+    transform: scale(1.25) rotate(-14deg);
+    filter: brightness(2);
+  }
+  40% {
+    transform: scale(0.9) rotate(10deg);
+  }
+  70% {
+    transform: rotate(-5deg);
+  }
+}
+.ring.shake {
+  animation: shake 0.45s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+@keyframes shake {
+  15% {
+    translate: -9px 5px;
+  }
+  35% {
+    translate: 8px -6px;
+  }
+  55% {
+    translate: -5px 3px;
+  }
+  75% {
+    translate: 3px -2px;
+  }
+}
+/* La bombe : elle glisse vers celui qui la tient. */
+.bomb {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  height: clamp(5.5rem, 100% - 12.5rem, 15rem);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  transition: left 0.45s cubic-bezier(0.3, 1.3, 0.5, 1), top 0.45s cubic-bezier(0.3, 1.3, 0.5, 1);
+  container-type: size;
+}
+/* Anneau trop bas pour qu'elle se déplace sans recouvrir un nom : elle reste au milieu. */
+@container (max-height: 24rem) {
+  .bomb {
+    left: 50% !important;
+    top: 50% !important;
+  }
+}
+/* À chaque passe elle atterrit en rebondissant. */
+.bomb-body {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: land 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) backwards;
+}
+@keyframes land {
+  from {
+    transform: scale(0.72) rotate(-22deg);
+  }
+}
+.bomb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 47% 68%;
+  animation: tick 1.1s ease-in-out infinite;
+}
+/* Plus elle reste, plus elle s'agite. */
+.bomb.tense-1 img {
+  animation-duration: 0.55s;
+}
+.bomb.tense-2 img {
+  animation-name: tick-hard;
+  animation-duration: 0.28s;
+}
+.bomb.tense-0 img {
+  animation-duration: 1.1s;
+}
+@keyframes tick {
+  50% {
+    transform: rotate(3deg) scale(1.03);
+  }
+}
+@keyframes tick-hard {
+  25% {
+    transform: rotate(-5deg) scale(1.05);
+  }
+  75% {
+    transform: rotate(5deg) scale(1.08);
+  }
+}
+/* La syllabe s'écrit sur l'étiquette blanche de la bombe. */
+.syllable {
+  position: absolute;
+  left: 47%;
+  top: 68%;
+  color: var(--navy);
+  font: 900 clamp(0.9rem, 17cqh, 3.25rem) / 1 var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  transform: translate(-50%, -50%);
+  animation: syl 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+@keyframes syl {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+}
+.meche-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.blast {
+  position: absolute;
+  width: clamp(7rem, 46cqh, 15rem);
+  height: auto;
+  transform: translate(-50%, -50%);
+  animation: blast 0.9s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+@keyframes blast {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.2) rotate(-25deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1) rotate(4deg);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.25);
+  }
+}
+/* Le mot accepté s'envole de son joueur ; une vie perdue s'annonce de la même façon. */
+.meche-badge {
+  position: absolute;
+  padding: 0.15em 0.7em;
+  border-radius: var(--r-pill);
+  background: var(--mint);
+  color: var(--navy);
+  font: 900 clamp(0.95rem, 4.5cqh, 1.4rem) / 1.3 var(--display);
+  white-space: nowrap;
+  transform: translate(-50%, -3.4rem);
+  animation: word-up 1.4s cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
+}
+.meche-badge.lost {
+  background: var(--corail);
+  color: #fff;
+}
+@keyframes word-up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -1.5rem) scale(0.4);
+  }
+  15%,
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -3.6rem) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -5rem) scale(0.9);
+  }
+}
+.meche-last {
+  min-height: 1.5em;
+  margin-bottom: 0.6rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  background: var(--veil);
+  text-align: center;
+  font-weight: 500;
+}
+/* Un mot refusé : le message passe en blanc plein et secoue la tête. */
+.meche-last.refused {
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+  animation: nope 0.3s;
+}
+@keyframes nope {
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+/* Les vies : des cœurs corail, doublés du nombre pour qui ne les voit pas. */
+.pips {
+  display: inline-flex;
+  gap: 0.15rem;
+  animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+.pips i {
+  display: block;
+  width: 1rem;
+}
+.pips svg {
+  display: block;
+  fill: var(--corail);
+  stroke: #fff;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.meche-form {
+  width: min(100%, 26rem);
+}
+.meche-form label {
+  display: block;
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+  font-weight: 700;
+}
+.meche-form input {
+  color: var(--ink);
+  font: 800 1.2rem/1 var(--display);
+}
+.meche-form input:disabled {
+  opacity: 0.6;
+}
+
+/* --- Bombermat ------------------------------------------------------------------- */
+
+.pd {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.35rem, 1vh, 0.75rem);
+}
+.pd .guide {
+  margin-bottom: 0.25rem;
+}
+.pd-hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1.5rem;
+  width: 100%;
+  min-height: 1.75rem;
+  font-variant-numeric: tabular-nums;
+}
+/* Vos bonus : une pastille blanche par bonus, et son nombre. */
+.pd-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.9rem;
+}
+.pd-stats li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+.pd-stats b {
+  font: 900 1.15rem/1 var(--display);
+  animation: pop 0.35s cubic-bezier(0.2, 1.2, 0.4, 1) backwards;
+}
+.pd-chip {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+}
+.pd-chip.skull {
+  background: var(--navy);
+  color: #fff;
+  box-shadow: 0 0 0 2px #fff;
+}
+.pd-chip svg {
+  width: 76%;
+  fill: currentColor;
+}
+.pd-cursed {
+  animation: pd-blink 0.9s steps(2) infinite;
+}
+.pd-clock {
+  margin-left: auto;
+  font-weight: 700;
+}
+.pd-count {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgb(8 28 102 / 0.55);
+  font: 900 clamp(4rem, 18vw, 9rem) / 1 var(--display);
+  /* Chaque seconde du départ claque. */
+  animation: pd-tick 0.9s var(--ease) backwards;
+}
+@keyframes pd-tick {
+  from {
+    font-size: clamp(6rem, 26vw, 13rem);
+    color: var(--mint);
+  }
+}
+/* La grille prend la plus grande taille qui tient en largeur comme en hauteur. */
+.pd-fit {
+  flex: 1;
+  min-height: 8rem;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.pd-grid {
+  position: relative;
+  width: min(100cqw, 100cqh * 13 / 11);
+  border-radius: 8px;
+  /* Un damier discret : une case sur deux un peu plus claire. */
+  background:
+    conic-gradient(rgb(255 255 255 / 0.05) 25%, transparent 0 50%, rgb(255 255 255 / 0.05) 0 75%, transparent 0) 0 0 / calc(200% / 13) calc(200% / 11),
+    var(--veil);
+  touch-action: none;
+}
+/* Une explosion secoue la grille. */
+.pd-grid.shake {
+  animation: pd-shake 0.3s linear;
+}
+@keyframes pd-shake {
+  20% {
+    translate: -3px 2px;
+  }
+  45% {
+    translate: 3px -2px;
+  }
+  70% {
+    translate: -2px -1px;
+  }
+}
+.pd-grid > :is(span, b) {
+  position: absolute;
+  width: var(--cw);
+  height: var(--ch);
+}
+/* Un pilier : un bloc navy au sommet plus clair, qui ne saute jamais. Une caisse : du bois
+   clair cerclé, avec ses deux planches. Tous deux se posent à leur arrivée. */
+.pd-pillar::before,
+.pd-crate::before {
+  content: '';
+  position: absolute;
+  inset: 5%;
+  border-radius: 20%;
+  animation: pd-set 0.35s var(--ease) backwards;
+  animation-delay: inherit;
+}
+.pd-pillar::before {
+  background: var(--navy);
+  box-shadow: inset 0 0.22em 0 rgb(255 255 255 / 0.22), inset 0 -0.22em 0 rgb(4 16 66 / 0.5);
+}
+.pd-crate::before {
+  background: rgb(255 255 255 / 0.62);
+  box-shadow: inset 0 0 0 0.16em rgb(255 255 255 / 0.9), inset 0 -0.3em 0 rgb(11 42 148 / 0.18);
+}
+.pd-crate::after {
+  content: '';
+  position: absolute;
+  inset: 24%;
+  background:
+    linear-gradient(45deg, transparent 44%, rgb(11 42 148 / 0.32) 44% 56%, transparent 56%),
+    linear-gradient(-45deg, transparent 44%, rgb(11 42 148 / 0.32) 44% 56%, transparent 56%);
+  animation: pd-set 0.35s var(--ease) backwards;
+  animation-delay: inherit;
+}
+@keyframes pd-set {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+}
+/* Une caisse saute : quatre éclats partent aux quatre coins. */
+.pd-pop {
+  z-index: 3;
+  pointer-events: none;
+}
+.pd-pop i {
+  position: absolute;
+  inset: 30%;
+  border-radius: 20%;
+  background: #fff;
+  animation: pd-shard 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.pd-pop i:nth-child(1) {
+  --sx: -110%;
+  --sy: -120%;
+}
+.pd-pop i:nth-child(2) {
+  --sx: 120%;
+  --sy: -100%;
+}
+.pd-pop i:nth-child(3) {
+  --sx: -100%;
+  --sy: 110%;
+}
+.pd-pop i:nth-child(4) {
+  --sx: 110%;
+  --sy: 120%;
+}
+@keyframes pd-shard {
+  to {
+    opacity: 0;
+    translate: var(--sx) var(--sy);
+    rotate: 200deg;
+    scale: 0.4;
+  }
+}
+/* Un bonus : une tuile blanche qui sort de la caisse, puis flotte en attendant qu'on la
+   prenne. La tête de mort est à l'envers des autres : navy, cerclée de blanc. */
+.pd-up {
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+  animation: pd-up-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) backwards, pd-float 1.6s 0.45s ease-in-out infinite;
+}
+.pd-up svg {
+  width: 62%;
+  padding: 10%;
+  border-radius: 24%;
+  background: #fff;
+  fill: currentColor;
+  box-sizing: content-box;
+  box-shadow: 0 0.2em 0 rgb(4 16 66 / 0.45);
+}
+.pd-up.skull svg {
+  background: var(--navy);
+  color: #fff;
+  box-shadow: 0 0 0 2px #fff, 0 0.2em 0 2px rgb(4 16 66 / 0.45);
+}
+@keyframes pd-up-in {
+  from {
+    scale: 0.2;
+    rotate: -40deg;
+  }
+}
+@keyframes pd-float {
+  50% {
+    translate: 0 -8%;
+  }
+}
+/* Le nom du bonus ramassé s'envole au-dessus de celui qui l'a pris. */
+.pd-word {
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: auto !important;
+  height: auto !important;
+  margin: -0.3em 0 0 calc(var(--cw) / 2);
+  padding: 0.15em 0.6em;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--navy);
+  font: 900 clamp(0.7rem, 2.2cqh, 1rem) / 1.2 var(--display);
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--seat);
+  translate: -50% -100%;
+  pointer-events: none;
+  animation: pd-word 1s cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
+}
+@keyframes pd-word {
+  from {
+    opacity: 0;
+    translate: -50% -20%;
+    scale: 0.5;
+  }
+  20%,
+  70% {
+    opacity: 1;
+    translate: -50% -100%;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    translate: -50% -190%;
+  }
+}
+/* Une bombe : elle bat de plus en plus vite, et blanchit juste avant de sauter. Poussée,
+   elle glisse d'une case à l'autre. */
+.pd-bomb {
+  top: 0;
+  left: 0;
+  z-index: 1;
+  transition: transform 0.07s linear;
+}
+.pd-bomb svg {
+  display: block;
+  width: 88%;
+  margin: 6%;
+  overflow: visible;
+  transform-origin: 50% 80%;
+  animation: pd-in 0.2s var(--ease) backwards, fuse 0.42s ease-in-out infinite alternate;
+}
+.pd-bomb.hot svg {
+  animation: fuse 0.14s ease-in-out infinite alternate;
+}
+.bb-body {
+  fill: var(--navy);
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+.pd-bomb.hot .bb-body {
+  animation: pd-flash 0.28s steps(2) infinite;
+}
+.bb-spikes {
+  fill: #fff;
+}
+.bb-shine,
+.bb-fuse {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.bb-shine {
+  opacity: 0.55;
+}
+.bb-spark {
+  fill: var(--feu);
+  stroke: #fff;
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pd-spark 0.18s linear infinite alternate;
+}
+@keyframes fuse {
+  to {
+    transform: scale(1.1, 0.86);
+  }
+}
+@keyframes pd-flash {
+  50% {
+    fill: #fff;
+  }
+}
+@keyframes pd-spark {
+  to {
+    scale: 0.55;
+    rotate: 45deg;
+  }
+}
+@keyframes pd-in {
+  from {
+    scale: 0.3;
+  }
+}
+/* Une explosion : un cœur blanc, des bras de feu au centre blanc, des bouts arrondis. Elle
+   gonfle d'un coup puis s'éteint en s'amincissant. */
+.pd-fire {
+  z-index: 4;
+  pointer-events: none;
+}
+.pd-fire::before,
+.pd-fire::after {
+  content: '';
+  position: absolute;
+  animation: pd-flame 0.45s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+.pd-fire::before {
+  background: var(--feu);
+}
+.pd-fire::after {
+  background: #fff;
+}
+.fire-h::before {
+  inset: 14% -1px;
+  --fs: 1 0.15;
+}
+.fire-h::after {
+  inset: 34% -1px;
+  --fs: 1 0.1;
+}
+.fire-v::before {
+  inset: -1px 14%;
+  --fs: 0.15 1;
+}
+.fire-v::after {
+  inset: -1px 34%;
+  --fs: 0.1 1;
+}
+.fire-c::before {
+  inset: 2%;
+  border-radius: 30%;
+  --fs: 0.2;
+}
+.fire-c::after {
+  inset: 22%;
+  border-radius: 50%;
+  --fs: 0.1;
+}
+.tip-r::before,
+.tip-r::after {
+  right: 12%;
+  border-radius: 0 999px 999px 0;
+}
+.tip-l::before,
+.tip-l::after {
+  left: 12%;
+  border-radius: 999px 0 0 999px;
+}
+.tip-d::before,
+.tip-d::after {
+  bottom: 12%;
+  border-radius: 0 0 999px 999px;
+}
+.tip-u::before,
+.tip-u::after {
+  top: 12%;
+  border-radius: 999px 999px 0 0;
+}
+@keyframes pd-flame {
+  from {
+    scale: var(--fs);
+  }
+  25% {
+    scale: 1.12;
+  }
+  60% {
+    scale: 1;
+    opacity: 1;
+  }
+  to {
+    scale: var(--fs);
+    opacity: 0;
+  }
+}
+/* Un joueur : son poseur de bombes, son nom au-dessus. */
+.pd-player {
+  top: 0;
+  left: 0;
+  transition: transform 0.07s linear;
+  z-index: 2;
+}
+.pd-bomber {
+  position: absolute;
+  left: 4%;
+  bottom: 2%;
+  width: 92%;
+  height: auto;
+  overflow: visible;
+}
+.bm-shadow {
+  fill: rgb(4 16 66 / 0.45);
+}
+.bm-foot {
+  fill: var(--navy);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.bm-suit {
+  fill: var(--seat);
+  stroke: #fff;
+  stroke-width: 2;
+}
+.bm-mark {
+  fill: #fff;
+}
+.seat-1 .bm-mark {
+  fill: var(--navy);
+}
+.bm-stem {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.bm-head {
+  fill: #fff;
+}
+.bm-visor {
+  fill: #cfdcfa;
+}
+.bm-eye {
+  fill: var(--navy);
+}
+/* Il regarde où il va : de profil, le visage glisse sur le côté ; de dos, il n'y en a pas. */
+.bm-face {
+  transition: translate 0.12s;
+}
+.face-l .bm-face {
+  translate: -4px 0;
+}
+.face-r .bm-face {
+  translate: 4px 0;
+}
+.face-u .bm-mark {
+  display: none;
+}
+/* Il respire à l'arrêt, et ses pieds marchent quand il avance. */
+.bm-all {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: pd-breathe 1.6s ease-in-out infinite;
+}
+.walk .bm-all {
+  animation: pd-bob 0.28s ease-in-out infinite;
+}
+.walk .bm-foot-l {
+  animation: pd-foot 0.28s linear infinite;
+}
+.walk .bm-foot-r {
+  animation: pd-foot 0.28s linear infinite reverse;
+}
+@keyframes pd-breathe {
+  50% {
+    scale: 1.03 0.97;
+  }
+}
+@keyframes pd-bob {
+  50% {
+    translate: 0 -2px;
+  }
+}
+@keyframes pd-foot {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25% {
+    translate: 0 -3px;
+  }
+  75% {
+    translate: 0 1px;
+  }
+}
+/* Menthe : « celui-ci », votre pièce. Un anneau sous ses pieds, et son nom sur menthe. */
+.pd-player.me .bm-shadow {
+  fill: none;
+  stroke: var(--mint);
+  stroke-width: 3;
+}
+.pd-tag {
+  position: absolute;
+  bottom: 104%;
+  left: 50%;
+  max-width: 260%;
+  padding: 0.05em 0.5em;
+  border-radius: var(--r-pill);
+  background: rgb(4 16 66 / 0.7);
+  font: 700 clamp(0.6rem, 1.7cqh, 0.8125rem) / 1.3 var(--body);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  translate: -50%;
+  pointer-events: none;
+}
+.pd-player.me .pd-tag {
+  background: var(--mint);
+  color: var(--navy);
+}
+/* Le gilet : une bulle blanche autour de lui. Sauvé de justesse, il clignote. */
+.pd-player.vest::after {
+  content: '';
+  position: absolute;
+  inset: -6% 0 2%;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.14);
+  animation: pd-bubble 1.2s ease-in-out infinite;
+}
+@keyframes pd-bubble {
+  50% {
+    scale: 1.07;
+    opacity: 0.7;
+  }
+}
+.pd-player.spared .pd-bomber {
+  animation: pd-blink 0.16s steps(2) infinite;
+}
+@keyframes pd-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+/* Ralenti par la tête de mort : elle tourne au-dessus de lui, et il traîne. */
+.pd-skull {
+  position: absolute;
+  top: -8%;
+  right: -22%;
+  width: 46%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--navy);
+  box-shadow: 0 0 0 1.5px #fff;
+  color: #fff;
+  animation: pd-float 0.7s ease-in-out infinite;
+}
+.pd-skull svg {
+  width: 74%;
+  fill: currentColor;
+}
+.pd-player.cursed .bm-all {
+  animation-duration: 0.7s;
+}
+/* Éliminé : il s'envole en tournant. */
+.pd-dead {
+  z-index: 30;
+  pointer-events: none;
+  transition: none;
+}
+.pd-dead .pd-bomber {
+  animation: pd-dead 0.95s cubic-bezier(0.3, 0, 0.4, 1) forwards;
+}
+.pd-dead .bm-all {
+  animation: none;
+}
+@keyframes pd-dead {
+  15% {
+    scale: 1.25;
+    rotate: -12deg;
+  }
+  to {
+    opacity: 0;
+    translate: 0 -180%;
+    rotate: 540deg;
+    scale: 0.5;
+  }
+}
+.seat-0 {
+  --seat: var(--corail);
+}
+.seat-1 {
+  --seat: var(--sable);
+}
+.seat-2 {
+  --seat: var(--algue);
+}
+.seat-3 {
+  --seat: var(--lagon);
+}
+/* Qui est qui : l'avatar du joueur, sa couleur et la forme qu'il porte sur son plastron. */
+.pd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem 1.25rem;
+}
+.pd-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+}
+.pd-legend .avatar {
+  width: 1.75rem;
+}
+.pd-legend .out {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.swatch {
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0.2rem;
+  border-radius: 50%;
+  background: var(--seat);
+  fill: #fff;
+}
+.seat-1 .swatch {
+  fill: var(--navy);
+}
+.pd-pad {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+.pd-cross {
+  display: grid;
+  grid-template: repeat(3, 3.25rem) / repeat(3, 3.25rem);
+}
+.pd-cross button {
+  border: 0;
+  border-radius: var(--r);
+  background: var(--veil-strong);
+  color: #fff;
+  font-size: 1.1rem;
+}
+.pd-u {
+  grid-area: 1 / 2;
+}
+.pd-l {
+  grid-area: 2 / 1;
+}
+.pd-r {
+  grid-area: 2 / 3;
+}
+.pd-d {
+  grid-area: 3 / 2;
+}
+.pd-drop {
+  height: 4.5rem;
+}
+/* Les boutons de jeu : sur un écran tactile, ou étroit. */
+@media (pointer: coarse), (max-width: 56rem) {
+  .pd-pad {
+    display: flex;
+  }
+}
+
+@media (max-width: 56rem) {
+  /* Sur un téléphone, la bande ne garde que le code ; les joueurs se déplient. */
+  .room {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    height: auto;
+  }
+  .room-code {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.4rem;
+    width: auto;
+    padding: 0.3rem 0.7rem;
+  }
+  .room-code strong {
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  .room-code span {
+    display: none;
+  }
+  .room-toggle {
+    display: block;
+  }
+  .room:not(.open) .room-body {
+    display: none;
+  }
+  .room-body {
+    flex: none;
+    width: 100%;
+    max-height: 60dvh;
+    overflow-y: auto;
+  }
+  .room-body > .members {
+    max-height: none;
+    overflow: visible;
+  }
+  .room-body > .chat {
+    flex: none;
+    height: 15rem;
+  }
+  #app:has(.play) .who,
+  #app:has(.play) #nav,
+  #app:has(.play) .lockup span {
+    display: none;
+  }
+  /* Sur un téléphone la table a besoin de hauteur pour asseoir tout le monde. */
+  .ono-table {
+    min-height: 13.5rem;
+  }
+  .terre .hand-title,
+  .terre .guide span {
+    display: none;
+  }
+  #app:has(.play) .main {
+    flex: 1;
+  }
+  /* La salle d'attente s'empile : le jeu et le bouton d'abord, puis les joueurs, puis les
+     autres jeux. C'est le panneau qui défile. */
+  .lobby {
+    display: flex;
+    flex-direction: column;
+  }
+  .lobby > * {
+    flex: none;
+  }
+  .lobby-crew > .members {
+    max-height: none;
+    overflow: visible;
+  }
+  .lobby-crew > .chat {
+    flex: none;
+    height: 18rem;
+  }
+  .lobby-game {
+    grid-template-rows: auto auto;
+  }
+  .lobby-art {
+    width: 4.25rem;
+  }
+  .lobby-what {
+    overflow: visible;
+  }
+  .lobby-what h1 {
+    font-size: 2rem;
+  }
+  .lobby-rules {
+    display: inline;
+  }
+  .lobby-rules-list {
+    display: none;
+  }
+  .lobby-go {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+
+  .picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pick-game {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.6rem;
+    padding: 0.45rem 0.65rem;
+    text-align: left;
+  }
+  .pick-game .art {
+    grid-row: span 2;
+    margin: 0;
+  }
+  .board-bar b {
+    font-size: 1rem;
+  }
+
+  /* Ono sur un écran étroit : les adversaires sur une ligne, la pile resserrée. */
+  .rivals {
+    gap: 0.4rem;
+  }
+  .rival {
+    min-width: 0;
+    flex: 1 1 0;
+    column-gap: 0.45rem;
+    padding: 0.35rem 0.5rem 0.35rem 0.35rem;
+  }
+  .rival .avatar {
+    width: 2rem;
+  }
+  .rival-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+  }
+  .rival-count {
+    font-size: 0.8125rem;
+  }
+  .terre .pile {
+    gap: 0.75rem;
+  }
+  .pile .top {
+    --card: clamp(2.9rem, min(64cqh, 22vw), 7rem);
+  }
+  .terre .deck {
+    --card: clamp(1.9rem, min(36cqh, 13vw), 4.5rem);
+  }
+  .turn-info {
+    min-width: 0;
+    font-size: 0.875rem;
+  }
+  .timer {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+  }
+  .timer-bar {
+    width: 4.5rem;
+  }
+  /* Sur un petit écran le bandeau garde son titre ; le détail est dans les règles. */
+  .pd .guide span,
+  .meche .guide span {
+    display: none;
+  }
+  .pd-stats {
+    gap: 0.2rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .pd-clock {
+    font-size: 0.875rem;
+  }
+  .pd-key,
+  .pav-legend {
+    display: none;
+  }
+  /* Vingt-cinq mots sur un écran étroit : plus petits, jamais coupés en deux. */
+  .word {
+    padding: 0.1rem;
+    font-size: clamp(0.5rem, 2.75vw, 0.9rem);
+    letter-spacing: -0.01em;
+    overflow-wrap: normal;
+  }
+  .word small {
+    font-size: 0.6rem;
+  }
+  .pav-team b {
+    flex-wrap: wrap;
+    font-size: 1.1rem;
+  }
+  .pav-grid {
+    gap: 0.3rem;
+  }
+  .word {
+    min-height: 3.5rem;
+    border-width: 2px;
+  }
+  .ring {
+    width: min(100cqw - 6.5rem, 36rem);
+  }
+  .bomber {
+    width: 6.5rem;
+  }
+}
+
+/* --- La feuille de dessin, pour Skribouille et Gartik Phone -------------------------- */
+
+.sketch {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+/* La feuille prend la plus grande taille 4:3 qui tient. */
+.pad-fit {
+  flex: 1;
+  min-height: 6rem;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+.pad {
+  display: block;
+  width: min(100cqw, 100cqh * 4 / 3);
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r);
+  background: #fff;
+}
+.pad.live {
+  cursor: crosshair;
+  touch-action: none;
+}
+.pad-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.9rem;
+}
+.pad-colors,
+.pad-widths {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.3rem;
+}
+.pad-colors button,
+.pad-widths button {
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 0.55);
+  border-radius: 50%;
+}
+.pad-widths button {
+  display: grid;
+  place-items: center;
+  background: #fff;
+}
+.pad-widths i {
+  border-radius: 50%;
+  background: var(--navy);
+}
+/* Menthe : « celui-ci », l'outil en main. */
+.pad-colors .on,
+.pad-widths .on {
+  box-shadow: 0 0 0 2px var(--sea-deep), 0 0 0 5px var(--mint);
+}
+
+/* --- Skribouille ------------------------------------------------------------------- */
+
+.skrib,
+.gartik {
+  display: flex;
+  flex-direction: column;
+}
+.sk-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 1.5rem;
+  min-height: 2.5rem;
+  margin-bottom: 0.6rem;
+}
+.sk-word {
+  margin-right: auto;
+  font: 900 clamp(1.4rem, 4vh, 2.4rem) / 1 var(--display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.sk-main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 17rem;
+  gap: clamp(0.6rem, 1.5vw, 1.25rem);
+}
+.sk-draw {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.sk-choose {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  font-size: 1.25rem;
+}
+.sk-side {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.sk-scores {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 45%;
+  overflow-y: auto;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+}
+.sk-scores .avatar {
+  grid-area: 1 / 1 / 3 / 2;
+  width: 2.25rem;
+  align-self: center;
+}
+.sk-scores li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  padding: 0.4rem 0.8rem;
+}
+.sk-scores li + li {
+  border-top: 1px solid var(--veil);
+}
+.sk-scores b {
+  grid-column: 2;
+  align-self: end;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-scores small {
+  grid-area: 2 / 2;
+  font-size: 0.8125rem;
+  opacity: 0.85;
+}
+.sk-scores small:empty {
+  display: none;
+}
+.sk-scores span {
+  grid-area: 1 / 3 / 3 / 4;
+  align-self: center;
+  font: 900 1.2rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.sk-scores i {
+  font-style: normal;
+  font-size: 0.875rem;
+  opacity: 0.85;
+}
+.sk-scores .me {
+  box-shadow: inset 3px 0 0 var(--mint);
+}
+.sk-scores .out {
+  opacity: 0.5;
+}
+.sk-log {
+  flex: 1;
+  min-height: 2.5rem;
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  list-style: none;
+  overflow-y: auto;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+.sk-log .found {
+  font-weight: 700;
+}
+.sk-log .close {
+  font-style: italic;
+}
+.sk-guess {
+  display: flex;
+  gap: 0.4rem;
+}
+.sk-guess input {
+  min-width: 0;
+  color: var(--ink);
+}
+.sk-guess input:disabled {
+  opacity: 0.6;
+}
+
+/* --- Gartik Phone ------------------------------------------------------------------ */
+
+.gk-write {
+  flex: 1;
+  display: grid;
+  place-items: center;
+}
+.gk-field {
+  display: block;
+  width: min(100%, 44rem);
+  margin: 0.5rem auto 0;
+  font-weight: 700;
+}
+.gk-field input {
+  margin-top: 0.35rem;
+  color: var(--ink);
+  font: 700 1.15rem/1 var(--body);
+}
+.gk-write .gk-field input {
+  height: 3.75rem;
+  font-size: 1.35rem;
+}
+.gk-field input:disabled {
+  opacity: 0.65;
+}
+.gk-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1.25rem;
+  margin-top: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.gk-foot .btn {
+  margin-left: auto;
+}
+.gk-album {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: clamp(0.6rem, 1.5vw, 1.25rem);
+}
+.gk-album > :only-child {
+  grid-column: 1 / -1;
+}
+.gk-page {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+}
+.gk-page figcaption {
+  font-weight: 700;
+}
+.gk-page.small {
+  opacity: 0.85;
+}
+.gk-page blockquote {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 1rem;
+  border-radius: var(--r-tile);
+  background: #fff;
+  color: var(--navy);
+  font: 900 clamp(1.1rem, 3.4vh, 2.25rem) / 1.2 var(--display);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.gk-page.small blockquote {
+  font-size: clamp(0.95rem, 2.2vh, 1.4rem);
+}
+
+/* Fenêtre basse : les légendes cèdent la place au jeu ; elles restent dans les règles. */
+@media (max-height: 44rem) {
+  .hand-title,
+  .deck small,
+  .pd-key,
+  .pav-legend,
+  .pav-log {
+    display: none;
+  }
+  .guide span {
+    font-size: 0.9375rem;
+  }
+}
+
+/* Les jeux de dessin sur un écran étroit. Ces règles viennent après celles des jeux,
+   qu'elles corrigent. */
+@media (max-width: 56rem) {
+  /* Skribouille sur un écran étroit : la feuille, puis les propositions dessous. */
+  .sk-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .sk-side {
+    max-height: 11.5rem;
+  }
+  .sk-scores {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+  }
+  .sk-scores li {
+    flex: none;
+    border: 0 !important;
+  }
+  .sk-scores small {
+    display: none;
+  }
+  .sk-word {
+    letter-spacing: 0.14em;
+  }
+  .pad-colors button,
+  .pad-widths button {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+  .skrib .guide span,
+  .gartik .guide span {
+    display: none;
+  }
+  .gk-album {
+    grid-template: minmax(0, 1fr) minmax(0, 2fr) / minmax(0, 1fr);
+  }
+}
+
+/* Codenoms : chaque joueur d'une équipe avec son avatar. */
+.pav-who {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+}
+.pav-who .avatar {
+  grid-row: span 2;
+  width: 2rem;
+}

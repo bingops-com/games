@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: games
+          POSTGRES_PASSWORD: games
+          POSTGRES_DB: games
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U games"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      GAMES_TEST_DATABASE_URL: postgres://games:games@localhost:5432/games
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the web UI
+        run: make web
+
+      - name: Vet and typecheck
+        run: |
+          go vet ./...
+          cd web && npm run typecheck
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Lint the Helm chart
+        run: helm lint chart
+
+      - name: Build the server
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/games ./cmd/games

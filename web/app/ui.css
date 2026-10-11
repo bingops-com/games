@@ -1,0 +1,900 @@
+/* Le kit de lab.bingo games : les jetons, la base, puis les pièces dont toutes les pages
+   et toutes les scènes sont faites. Une pièce se décrit ici une fois ; une page ne fait
+   que la placer. La page /uikit/ les montre toutes, sur le papier et sur la mer. */
+
+@font-face {
+  font-family: 'Red Hat Display Variable';
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('/fonts/red-hat-display-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Red Hat Display Variable';
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('/fonts/red-hat-display-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Red Hat Text Variable';
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/red-hat-text-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Red Hat Text Variable';
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('/fonts/red-hat-text-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --- Jetons ----------------------------------------------------------------------- */
+
+:root {
+  --ground: #f3f6fc;
+  --surface: #ffffff;
+  --ink: #111730;
+  --ink-soft: #586079;
+  --line: #d5dcec;
+  --field-line: #8690a3;
+  --tint: #e9eefb;
+  /* La pastille claire sous une pièce d'avatar : la même dans les deux thèmes. */
+  --pale: #e9eefb;
+  --sea: #1443d6;
+  --sea-hover: #0f36b3;
+  --sea-deep: #0a2480;
+  --navy: #0b2a94;
+  --mint: #8af2bf;
+  --link: #1443d6;
+  --danger: #b3261e;
+  --display: 'Red Hat Display Variable', ui-sans-serif, system-ui, sans-serif;
+  --body: 'Red Hat Text Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Sur la mer : deux voiles de blanc, un creux, et le blanc cassé d'un bouton survolé. */
+  --veil: rgb(255 255 255 / 0.12);
+  --veil-strong: rgb(255 255 255 / 0.2);
+  --hollow: rgb(4 16 66 / 0.32);
+  --white-hover: #e6ecfb;
+  --sea-fill: linear-gradient(170deg, var(--sea) 30%, var(--sea-deep) 100%);
+  --scrim: rgb(8 28 102 / 0.6);
+  /* Formes : champs et boutons, tuiles, panneaux, pastilles. */
+  --r: 10px;
+  --r-tile: 12px;
+  --r-panel: 14px;
+  --r-pill: 999px;
+  /* Hauteur d'un contrôle : normal, petit, grand. */
+  --h: 3rem;
+  --h-small: 2.25rem;
+  --h-big: 3.75rem;
+  --shadow-pop: 0 0 0 1px var(--line), 0 12px 32px rgb(8 28 102 / 0.28);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #060f2b;
+    --surface: #0c1a45;
+    --ink: #eaefff;
+    --ink-soft: #a3b3df;
+    --line: #20327a;
+    --field-line: #5368b5;
+    --tint: #16296a;
+    --sea: #1238b8;
+    --sea-hover: #1a47d6;
+    --sea-deep: #081c66;
+    --link: #9db6ff;
+    --danger: #ff9d94;
+    color-scheme: dark;
+  }
+}
+
+/* Du papier posé sur la mer (la carte du jeu choisi, le résultat, une feuille à dessin)
+   reste blanc dans les deux thèmes : il reprend les jetons du thème clair. */
+.light {
+  --surface: #ffffff;
+  --ink: #111730;
+  --ink-soft: #586079;
+  --line: #d5dcec;
+  --field-line: #8690a3;
+  --tint: #e9eefb;
+  --sea: #1443d6;
+  --sea-hover: #0f36b3;
+  --sea-deep: #0a2480;
+  --link: #1443d6;
+  --danger: #b3261e;
+  background: var(--surface);
+  color: var(--ink);
+  color-scheme: light;
+}
+
+/* --- Base ------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 1rem/1.5 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+p,
+ul,
+dl,
+dd {
+  margin: 0;
+  padding: 0;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--display);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+ul {
+  list-style: none;
+}
+a {
+  color: var(--link);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--link) 60%, transparent);
+  outline-offset: 2px;
+}
+.sea :focus-visible {
+  outline-color: #fff;
+}
+.sea .light :focus-visible {
+  outline-color: color-mix(in srgb, var(--link) 60%, transparent);
+}
+/* Lu par un lecteur d'écran, invisible à l'écran. */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- Surfaces : la mer, la carte de papier ------------------------------------------ */
+
+.sea {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background: var(--sea-fill);
+  color: #fff;
+}
+/* Semis de carte marine, visible seulement quand on le cherche. */
+.sea::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.12;
+  background: radial-gradient(#fff 1px, transparent 1.6px) 0 0 / 1.75rem 1.75rem;
+  pointer-events: none;
+}
+.panel {
+  padding: 1.5rem;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+/* Un panneau dans la mer : un voile, pour regrouper sans cadre. */
+.veil {
+  padding: clamp(0.9rem, 2vh, 1.25rem);
+  border-radius: var(--r-panel);
+  background: var(--veil);
+}
+/* La petite tuile de mer sous un avatar ou un dessin blanc posé sur du papier. */
+.chip-sea {
+  border-radius: var(--r);
+  background: var(--sea-fill);
+  box-sizing: content-box;
+}
+
+/* --- Boutons ---------------------------------------------------------------------- */
+
+/* .btn avec une couleur (.primary sur le papier, .white sur la mer pour l'action
+   principale ; .quiet et .onsea pour les autres) et au besoin une taille (.small, .big). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: var(--h);
+  padding: 0 1.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.12s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+.btn.primary {
+  background: var(--sea);
+  color: #fff;
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--sea-hover);
+}
+.btn.quiet {
+  border-color: var(--field-line);
+  background: none;
+  color: var(--ink);
+  font-weight: 500;
+}
+.btn.quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--link) 8%, transparent);
+}
+.btn.white {
+  background: #fff;
+  color: var(--navy);
+}
+.btn.white:hover:not(:disabled) {
+  background: var(--white-hover);
+}
+.btn.onsea {
+  border-color: rgb(255 255 255 / 0.55);
+  background: none;
+  color: #fff;
+  font-weight: 500;
+}
+.btn.onsea:hover:not(:disabled) {
+  background: var(--veil);
+}
+.btn.small {
+  height: var(--h-small);
+  padding: 0 0.85rem;
+  font-size: 0.9375rem;
+}
+.btn.big {
+  height: var(--h-big);
+  padding: 0 2rem;
+  border-radius: var(--r-panel);
+  font: 800 1.25rem/1 var(--display);
+}
+/* Un bouton qui n'est qu'un pictogramme : carré, et nommé par aria-label. */
+.btn.icon {
+  width: var(--h);
+  padding: 0;
+  flex: none;
+}
+.btn.icon.small {
+  width: var(--h-small);
+}
+.btn svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+}
+/* Un bouton écrit comme un lien, dans une phrase. */
+.as-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-weight: 500;
+  text-decoration: underline;
+}
+.sea .as-link:not(.light *) {
+  color: #fff;
+}
+/* Des boutons côte à côte, qui passent à la ligne s'il le faut. */
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* Les pictogrammes du kit : un trait aux bouts ronds, de la couleur du texte. */
+.ic {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- Champs ----------------------------------------------------------------------- */
+
+/* Une étiquette au-dessus de son champ, qu'elle l'entoure ou qu'elle le précède. */
+label,
+legend {
+  display: block;
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+label > :is(input, select, textarea),
+label + :is(input, select, textarea, .join-row),
+legend + * {
+  margin-top: 0.35rem;
+}
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--field-line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+}
+input,
+select {
+  height: var(--h);
+  padding: 0 0.85rem;
+}
+textarea {
+  padding: 0.7rem 0.9rem;
+  resize: vertical;
+}
+::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+:is(input, select, textarea):focus-visible {
+  outline-offset: 0;
+  border-color: var(--link);
+}
+/* Un champ sur la mer est du papier : blanc dans les deux thèmes. */
+.sea :is(input, select, textarea):not(.light *) {
+  border-color: transparent;
+  background: #fff;
+  color: #111730;
+}
+.sea :is(input, select, textarea):not(.light *)::placeholder {
+  color: #586079;
+}
+/* Une case ou un bouton radio, et sa phrase à côté. */
+input:is([type='checkbox'], [type='radio']) {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--sea);
+}
+.sea input:is([type='checkbox'], [type='radio']):not(.light *) {
+  accent-color: var(--mint);
+  color-scheme: light;
+}
+label.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 1rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+label.check input {
+  margin-top: 0.2rem;
+}
+input[type='range'] {
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--sea);
+}
+/* Le mot d'aide sous un champ, la phrase discrète sous un titre. */
+.help,
+.hint {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.help {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+}
+.sea :is(.help, .hint):not(.light *) {
+  color: #fff;
+  opacity: 0.85;
+}
+/* Un champ et son bouton sur la même ligne. */
+.join-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.join-row > input {
+  min-width: 0;
+}
+.join-row > .btn {
+  flex: none;
+}
+/* Des champs l'un sous l'autre, le bouton à gauche. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.stack > .btn {
+  align-self: flex-start;
+}
+
+/* --- Pastilles et jauges ------------------------------------------------------------ */
+
+/* Un nombre, un état ou une petite action : blanche sur la mer, teintée sur le papier. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: var(--tint);
+  color: var(--ink);
+  font: 700 0.8125rem/1.2 var(--body);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sea .pill:not(.light *) {
+  background: #fff;
+  color: var(--navy);
+}
+/* La même en creux : une action secondaire sur la mer. */
+.sea .pill.ghost:not(.light *) {
+  border-color: rgb(255 255 255 / 0.45);
+  background: none;
+  color: #fff;
+  font-weight: 500;
+}
+.sea button.pill.ghost:not(.light *):hover {
+  background: var(--veil-strong);
+}
+.pill.count {
+  padding-inline: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.pill svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+/* Une jauge : où en est un objectif. Elle prend la couleur du texte. */
+.bar {
+  display: block;
+  height: 0.5rem;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  min-width: 0.5rem;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.6s var(--ease);
+}
+
+/* --- Listes : des lignes séparées par un filet ----------------------------------------- */
+
+.rows > li {
+  padding-block: 0.7rem;
+}
+.rows > li + li {
+  border-top: 1px solid var(--line);
+}
+.sea .rows:not(.light *) > li + li {
+  border-color: var(--veil-strong);
+}
+/* Un joueur : son avatar, son nom, un mot sur lui dessous, puis ce qu'on peut en faire. */
+.member {
+  display: grid;
+  grid-template-columns: var(--member-avatar, 2.5rem) minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 0.7rem;
+  padding: 0.4rem 0;
+}
+.member + .member {
+  border-top: 1px solid var(--veil-strong);
+}
+.member > .avatar,
+.member > .disc {
+  grid-row: span 2;
+  width: var(--member-avatar, 2.5rem);
+}
+.member > :is(a, b) {
+  color: inherit;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.member > a:hover {
+  text-decoration: underline;
+}
+.member > small {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  opacity: 0.8;
+}
+.member > small:empty {
+  display: none;
+}
+.member.off > :not(.member-menu) {
+  opacity: 0.6;
+}
+/* Menthe : « celui-ci », vous. */
+.member.me > small::before {
+  content: '';
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: var(--mint);
+}
+/* Quelqu'un entre : sa ligne se pose. */
+.member:not(.free) {
+  animation: join 0.35s var(--ease) backwards;
+}
+/* Une place qu'il reste à remplir : un rond vide, et son nom en clair. */
+.member.free > .disc {
+  aspect-ratio: 1;
+  height: auto;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.55);
+  scale: 0.8;
+}
+.member.free > b {
+  font-weight: 500;
+  opacity: 0.8;
+}
+/* Ce qui suit le nom (une pastille, les trois points) se centre sur les deux lignes. */
+.member > :is(.pill, .btn, .dots) {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.member > .pill {
+  grid-column: 3;
+}
+.member > :is(.dots, .btn) {
+  grid-column: 4;
+}
+.member > .member-menu {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.4rem 0 0.2rem;
+}
+/* Trois points : ouvre les actions sous la ligne. */
+.dots {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+}
+.dots:hover,
+.dots[aria-expanded='true'] {
+  background: var(--veil-strong);
+}
+.dots svg {
+  width: 1.2rem;
+  fill: currentColor;
+}
+
+/* --- Dialogue et messages -------------------------------------------------------------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--scrim);
+}
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 24rem;
+  max-height: calc(100dvh - 2rem);
+  padding: 1.75rem;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  /* Une fenêtre ouverte depuis une carte blanche ou un panneau bleu ne doit pas hériter
+     de leur couleur de texte : elle a son fond, donc sa propre encre. */
+  color: var(--ink);
+  text-align: left;
+  overflow-y: auto;
+  animation: rise 0.25s var(--ease) backwards;
+}
+.dialog.medium {
+  max-width: 34rem;
+}
+.dialog.wide {
+  max-width: 44rem;
+}
+.dialog h2 {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+.dialog > p {
+  color: var(--ink-soft);
+}
+.dialog .help {
+  margin-top: -0.5rem;
+}
+#toasts {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  left: 1.25rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.toast {
+  max-width: 24rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r);
+  background: var(--ink);
+  color: var(--ground);
+  font-weight: 500;
+  animation: rise 0.25s var(--ease) backwards;
+}
+
+/* --- La discussion ----------------------------------------------------------------------- */
+
+/* Elle vit sur la mer : les messages des autres sur un voile, à gauche sous leur avatar ;
+   les vôtres en blanc, à droite. Le champ reste en bas, les messages défilent au-dessus. */
+.chat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+.chat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.chat-head h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.chat-head small {
+  font-size: 0.8125rem;
+  opacity: 0.8;
+}
+.chat-log {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 4rem;
+  margin-inline: -0.25rem;
+  padding: 0.1rem 0.25rem;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+  scrollbar-color: var(--veil-strong) transparent;
+}
+/* Les premiers messages se posent en bas, près du champ. */
+.chat-log > :first-child {
+  margin-top: auto;
+}
+.chat-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  margin-bottom: auto;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.9375rem;
+  text-align: center;
+  opacity: 0.8;
+}
+.chat-empty .ic {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+/* Les messages qu'un joueur écrit à la suite se regroupent sous son nom. */
+.chat-group {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  column-gap: 0.45rem;
+  row-gap: 0.15rem;
+  justify-items: start;
+  animation: rise 0.2s var(--ease) backwards;
+}
+.chat-group > .avatar {
+  grid-row: 1 / span 2;
+  align-self: start;
+  width: 1.75rem;
+  margin-top: 0.1rem;
+}
+.chat-who {
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  max-width: 100%;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+.chat-who b {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-who time {
+  flex: none;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.chat-group ul {
+  grid-column: 2;
+  display: grid;
+  justify-items: start;
+  gap: 0.15rem;
+  max-width: 100%;
+}
+.chat-group li {
+  max-width: 100%;
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px 12px 12px 4px;
+  background: var(--veil-strong);
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+.chat-group li:first-child {
+  border-top-left-radius: 12px;
+}
+.chat-group li:last-child {
+  border-bottom-left-radius: 12px;
+}
+/* Les vôtres : à droite, sur du blanc, sans avatar ni nom. */
+.chat-group.mine {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+  padding-left: 1.75rem;
+}
+.chat-group.mine .chat-who,
+.chat-group.mine ul {
+  grid-column: 1;
+  justify-items: end;
+}
+.chat-group.mine li {
+  border-radius: 12px 4px 4px 12px;
+  background: #fff;
+  color: var(--navy);
+}
+.chat-group.mine li:first-child {
+  border-top-right-radius: 12px;
+}
+.chat-group.mine li:last-child {
+  border-bottom-right-radius: 12px;
+}
+/* Des messages sont arrivés pendant qu'on relisait plus haut. */
+.chat-new {
+  position: absolute;
+  right: 50%;
+  bottom: 3.4rem;
+  transform: translateX(50%);
+  box-shadow: 0 4px 14px rgb(4 16 66 / 0.35);
+  cursor: pointer;
+}
+/* Le champ et son bouton ne font qu'un. */
+.chat-form {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 2.75rem;
+  padding: 0 0.3rem 0 0;
+  border-radius: var(--r);
+  background: #fff;
+}
+.chat-form:focus-within {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 0.3rem 0 0.8rem;
+  border: 0;
+  background: none;
+  font-size: 0.9375rem;
+}
+.chat .chat-form input:focus-visible {
+  outline: 0;
+}
+.chat-form .btn {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 8px;
+}
+.chat-form .btn:disabled {
+  background: var(--tint);
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.chat-count {
+  flex: none;
+  color: #586079;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Mouvements du kit ------------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+@keyframes join {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}

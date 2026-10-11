@@ -1,0 +1,19 @@
+# A PostgreSQL for development and for the tests: make db
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: games
+      POSTGRES_PASSWORD: games
+      POSTGRES_DB: games
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "games"]
+      interval: 2s
+      retries: 30
+
+volumes:
+  postgres:

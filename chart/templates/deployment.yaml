@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "games.fullname" . }}
+  labels:
+    {{- include "games.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "games.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "games.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: games
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: GAMES_ADDR
+              value: ":3778"
+            - name: GAMES_TRUST_PROXY
+              value: {{ .Values.trustProxy | quote }}
+            - name: GAMES_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "games.databaseSecret" . }}
+                  key: {{ include "games.databaseSecretKey" . }}
+            {{- with .Values.publicUrl }}
+            - name: GAMES_PUBLIC_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.mail.relay }}
+            - name: GAMES_SMTP_ADDR
+              value: {{ .Values.mail.relay | quote }}
+            - name: GAMES_MAIL_FROM
+              value: {{ .Values.mail.from | quote }}
+            - name: GAMES_MAIL_ENVELOPE
+              value: {{ .Values.mail.envelope | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 3778
+          # /healthz answers "ok" only while the database does.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

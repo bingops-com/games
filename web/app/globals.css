@@ -1,0 +1,2185 @@
+/* lab.bingo games. Une interface sobre autour de panneaux de mer : l'étagère des jeux est
+   une bande bleue, une table se regarde de dessus sur un panneau bleu, tout le reste est du
+   papier. Les jetons et les pièces communes (boutons, champs, pastilles, dialogues,
+   discussion) sont dans ui.css ; ici, le cadre et les pages. */
+
+/* --- Cadre : une bande de mer à gauche, la page à droite ----------------------------- */
+
+#app {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  min-height: 100dvh;
+}
+.side.sea {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100dvh;
+  padding: 1.25rem 0.9rem 0;
+  border-radius: 0;
+  overflow: hidden auto;
+}
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 0.4rem;
+  font: 800 1.25rem/1 var(--display);
+  letter-spacing: -0.02em;
+  color: #fff;
+  text-decoration: none;
+}
+.lockup-kind {
+  font-weight: 500;
+  opacity: 0.8;
+}
+.logo {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  border-radius: 22%;
+  box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.4);
+}
+#nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+#nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border-radius: var(--r);
+  color: #fff;
+  font-weight: 500;
+  text-decoration: none;
+}
+#nav a:hover {
+  background: var(--veil);
+}
+#nav a[aria-current='page'] {
+  background: var(--veil-strong);
+  font-weight: 700;
+}
+#nav .art,
+/* Les pictogrammes de la navigation : un trait blanc épais aux bouts ronds, et un aplat
+   pâle pour le volume. Celui de la page ouverte se remplit. */
+.nav-ic {
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: none;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.nav-ic .tint {
+  fill: #fff;
+  fill-opacity: 0.22;
+  transition: fill-opacity 0.15s;
+}
+.nav-ic .dot {
+  fill: #fff;
+  stroke: none;
+}
+#nav a:hover .nav-ic .tint,
+#nav a[aria-current='page'] .nav-ic .tint {
+  fill-opacity: 0.5;
+}
+#nav hr {
+  width: 100%;
+  margin: 0.6rem 0;
+  border: 0;
+  border-top: 1px solid var(--veil-strong);
+}
+/* Dans un salon, la navigation reste, réduite à ses pictogrammes sur une ligne : la place
+   va au salon, qui s'écrit dessous. */
+.side.in-room #nav {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.side.in-room #nav > a {
+  flex: 1;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0;
+}
+.side.in-room #nav > a > :is(span, small) {
+  display: none;
+}
+.side.in-room #nav > a .pill {
+  position: absolute;
+  margin: -1.4rem 0 0 1.6rem;
+}
+.side.in-room .pals {
+  width: 100%;
+  margin-top: 0.2rem;
+}
+#side-slot:empty {
+  display: none;
+}
+.side.in-room .mascot {
+  display: none;
+}
+#side-slot {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Si la fenêtre est trop basse pour le salon entier, c'est la bande qui défile. */
+@media (min-width: 56.0625rem) {
+  .side.in-room #side-slot:has(.room:not(.waiting)) {
+    min-height: 24rem;
+  }
+}
+.side.in-room {
+  gap: 0.9rem;
+}
+/* Le salon qu'on a quitté ou dont on s'est éloigné : son code, une croix pour l'écarter,
+   et de quoi y retourner. */
+.resume {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  padding: 0.6rem 0.6rem 0.7rem 0.8rem;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  animation: rise 0.3s var(--ease) backwards;
+}
+/* Le chat lui laisse la place : le compte reste entier au pied de la bande. */
+.side:has(.resume) .mascot {
+  display: none;
+}
+.resume p {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.resume small {
+  font-size: 0.875rem;
+  opacity: 0.85;
+}
+.resume strong {
+  font: 900 1.35rem/1 var(--display);
+  letter-spacing: 0.12em;
+}
+.resume .dots svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+}
+.resume .btn {
+  grid-column: 1 / -1;
+  margin-right: 0.2rem;
+}
+/* Les amis en ligne, à déplier sous la navigation. */
+.pals {
+  margin-top: 0.4rem;
+  border-radius: var(--r);
+  background: var(--veil);
+}
+.pals summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0 0.7rem;
+  border-radius: var(--r);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.pals summary::-webkit-details-marker {
+  display: none;
+}
+.pals summary .pill {
+  margin-left: auto;
+}
+.pals summary::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.pals[open] summary::before {
+  transform: rotate(45deg);
+}
+.pals p {
+  padding: 0.2rem 0.7rem 0.7rem;
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+.pals p a {
+  color: #fff;
+}
+/* La bande est étroite : la ligne se resserre pour laisser le nom lisible. */
+.pals .member {
+  grid-template-columns: var(--member-avatar) minmax(0, 1fr) auto;
+  column-gap: 0.45rem;
+}
+.pals .member > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pals ul {
+  --member-avatar: 2rem;
+  max-height: 13rem;
+  padding: 0 0.5rem 0.5rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* Dans la liste des amis, le nom et la pastille ne sont pas des liens de navigation. */
+#nav .pals .member > a:not(.pill) {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  font-weight: 700;
+}
+#nav .pals a.pill {
+  display: inline-flex;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--navy);
+  font-weight: 700;
+}
+#nav .pals :is(a, button).pill:hover {
+  background: var(--white-hover);
+}
+/* Une invitation, en fenêtre : qui invite, en grand, au-dessus des deux réponses. */
+.ask-dialog {
+  text-align: center;
+}
+.ask-dialog .avatar {
+  order: -1;
+  align-self: center;
+  width: 5.5rem;
+  padding: 0.3rem;
+  border-radius: var(--r-panel);
+}
+/* Une invitation à rejoindre un salon : une carte en bas de l'écran. */
+.invites {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(22rem, calc(100vw - 2rem));
+}
+.invite-card {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line), 0 12px 32px rgb(8 28 102 / 0.28);
+  animation: rise 0.3s var(--ease) backwards;
+}
+
+.invite-card .avatar {
+  width: 3.25rem;
+  padding: 0.15rem;
+}
+.invite-card .row-actions {
+  grid-column: 1 / -1;
+}
+.side .mascot {
+  width: 6.5rem;
+  margin: auto auto 0;
+  flex: none;
+}
+
+/* Qui joue, au pied de la bande. */
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem 0.4rem 1rem;
+  border-top: 1px solid var(--veil-strong);
+}
+/* Dans un salon le chat s'efface : le compte reste au pied de la bande. */
+.side.in-room .who {
+  margin-top: 0;
+}
+.who-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.who:has(.who-name) .who-links {
+  flex-direction: row;
+  gap: 0.4rem;
+}
+.who:has(.who-name) .who-links .btn {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 0.4rem;
+  font-size: 0.875rem;
+}
+.side.in-room .who {
+  padding-block: 0.7rem 0.6rem;
+}
+.who-name {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.2rem;
+  color: #fff;
+  text-decoration: none;
+}
+.who-name b {
+  font: 800 1.1rem/1.2 var(--display);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.who-disc {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--navy);
+  font: 900 1rem/1 var(--display);
+}
+.lang {
+  align-self: flex-start;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 0.875rem;
+  text-decoration: underline;
+  opacity: 0.9;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+#view {
+  width: 100%;
+  max-width: 82rem;
+  padding: clamp(1rem, 2.5vw, 2.25rem) clamp(1rem, 3vw, 2.75rem);
+}
+/* L'accueil prend toute la largeur : le panneau des jeux va jusqu'au bord de la fenêtre. */
+#view:has(.home) {
+  max-width: none;
+}
+.foot {
+  margin-top: auto;
+  padding: 1rem clamp(1rem, 3vw, 2.75rem) 1.5rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+/* Pleine fenêtre : il ne reste que la scène. */
+#app.full {
+  grid-template-columns: minmax(0, 1fr);
+}
+#app.full .side,
+#app.full .foot {
+  display: none;
+}
+.notice {
+  max-width: 40rem;
+  color: var(--ink-soft);
+}
+
+/* Les dessins : blancs, détails navy, une seule ombre (un blanc plus pâle). */
+.art {
+  display: block;
+  fill: #fff;
+  overflow: visible;
+}
+.art-pale {
+  opacity: 0.5;
+}
+.art-ink {
+  fill: var(--navy);
+}
+.art-stroke,
+.art-line {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.art-line {
+  stroke: var(--navy);
+}
+
+/* Les illustrations des jeux : des images cartoon détourées, posées sur le bleu comme sur
+   le papier. Elles portent la classe .art comme les dessins des scènes. */
+img.art {
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* --- Accueil : une question, le champ pour rejoindre, puis l'étagère --------------- */
+
+/* L'accueil : à gauche de quoi entrer dans un salon, à droite les jeux. */
+.home {
+  display: grid;
+  grid-template-columns: minmax(0, clamp(26rem, 28vw, 30rem)) minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  /* L'accueil tient dans la fenêtre : les tuiles des jeux se partagent la hauteur. */
+  height: calc(100dvh - 8.6rem);
+  min-height: 31rem;
+}
+.start {
+  align-self: center;
+}
+.start h1 {
+  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+.start-lead {
+  margin: 1rem 0 1.75rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+}
+
+.start-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.start-field input {
+  margin-top: 0.35rem;
+  font: 800 1.2rem/1 var(--display);
+}
+.start-join .join-row {
+  margin-top: 0.35rem;
+}
+.start-who:has(.start-name) {
+  align-items: center;
+}
+.start-name b {
+  font: 900 clamp(1.5rem, 2.4vw, 1.9rem) / 1.1 var(--display);
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.start-name small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+.field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.field-head .as-link {
+  font-size: 0.8125rem;
+}
+.start-pick {
+  margin-top: -0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+.start-pick b {
+  color: var(--ink);
+}
+.start-or {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+.start-or::before,
+.start-or::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.code-field {
+  min-width: 0;
+  font: 800 1.25rem/1 var(--display);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+.code-field::placeholder {
+  color: var(--field-line);
+}
+.games {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+}
+/* Une rose des vents dans le coin du panneau, au même niveau que le semis de points. */
+.games::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: clamp(-9rem, -11vw, -5rem);
+  right: clamp(-9rem, -11vw, -5rem);
+  width: clamp(16rem, 30vw, 30rem);
+  aspect-ratio: 1;
+  opacity: 0.1;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none' stroke='%23fff'%3E%3Ccircle cx='100' cy='100' r='96' stroke-width='1.5'/%3E%3Ccircle cx='100' cy='100' r='84' stroke-width='.75' stroke-dasharray='1 5.6'/%3E%3Ccircle cx='100' cy='100' r='46' stroke-width='.75'/%3E%3Cpath stroke-width='.75' d='M100 4v192M4 100h192M32 32l136 136M168 32L32 168'/%3E%3Cpath fill='%23fff' stroke='none' d='M100 12l11 77 77 11-77 11-11 77-11-77-77-11 77-11z'/%3E%3Cpath fill='%23fff' fill-opacity='.45' stroke='none' d='M100 100l-9-9 9-55 9 55zM100 100l9 9-9 55-9-55z' transform='rotate(45 100 100)'/%3E%3Cpath fill='%23fff' fill-opacity='.45' stroke='none' d='M100 100l-9-9 9-55 9 55zM100 100l9 9-9 55-9-55z' transform='rotate(-45 100 100)'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
+}
+.games h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2.75rem);
+  font-weight: 900;
+}
+.games-lead {
+  margin: 0.35rem 0 1.1rem;
+  opacity: 0.9;
+}
+.games ul {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template: repeat(2, minmax(0, 1fr)) / repeat(3, minmax(0, 1fr));
+  gap: clamp(0.6rem, 1.2vw, 1rem);
+}
+.game-tile {
+  /* L'illustration du jeu en haut, son nom et ses joueurs au pied. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: clamp(0.6rem, min(1.6vw, 2.4vh), 1.5rem);
+  border: 0;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  color: #fff;
+  text-align: left;
+  overflow: hidden;
+  position: relative;
+  transition: background 0.2s, transform 0.2s var(--ease);
+  /* À l'arrivée, les jeux se posent l'un après l'autre. */
+  animation: rise 0.5s var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+.game-tile:active:not(:disabled) {
+  transform: scale(0.985);
+}
+.game-tile:hover:not(:disabled) {
+  background: var(--veil-strong);
+}
+.game-tile:disabled {
+  opacity: 1;
+}
+/* Menthe : « celui-ci », le premier jeu du salon. */
+.game-tile.on {
+  background: var(--veil-strong);
+  box-shadow: inset 0 0 0 3px var(--mint);
+}
+/* L'illustration prend la place que le texte lui laisse : le nom et les joueurs ne sont
+   jamais coupés, quelle que soit la hauteur de la fenêtre. */
+.game-tile .art {
+  flex: 1 1 0;
+  min-height: 0;
+  width: auto;
+  max-width: 100%;
+  max-height: 21rem;
+  margin: -0.25rem 0 0.4rem -0.25rem;
+  object-position: left center;
+}
+.game-tile b,
+.game-tile small,
+.tile-pitch {
+  flex: none;
+}
+/* L'illustration répond au pointeur : elle se dandine une fois. */
+:is(.game-tile, .pick-game):is(:hover, :focus-visible):not(:disabled) .art {
+  animation: wobble 0.6s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.game-tile b {
+  font: 900 clamp(1rem, 10.5cqw, 2.25rem) / 1.1 var(--display);
+}
+.game-tile small {
+  margin-top: 0.2rem;
+  font-size: clamp(0.8125rem, 5.6cqw, 1.1rem);
+  font-weight: 500;
+  opacity: 0.85;
+}
+.tile-min {
+  display: none;
+}
+.tile-pitch {
+  display: none;
+  /* Trois lignes réservées : les noms des jeux restent alignés d'une tuile à l'autre. */
+  min-height: 4.2em;
+  margin-top: 0.6rem;
+  max-width: 24rem;
+  font-size: clamp(1rem, 4.4cqw, 1.2rem);
+  line-height: 1.4;
+  opacity: 0.9;
+}
+/* Entre le téléphone et le grand écran, le panneau est étroit : deux jeux par rangée. */
+@media (min-width: 56.0625rem) and (max-width: 75rem) {
+  .games ul {
+    grid-template: repeat(3, minmax(0, 1fr)) / repeat(2, minmax(0, 1fr));
+  }
+}
+/* Trois jeux par rangée ; chaque tuile se règle sur la place qu'elle a. */
+.games li {
+  container-type: size;
+}
+@container (min-width: 13rem) {
+  .tile-min {
+    display: inline;
+  }
+}
+@container (min-height: 22rem) and (min-width: 16rem) {
+  .tile-pitch {
+    display: block;
+  }
+}
+
+/* --- La mascotte ------------------------------------------------------------------ */
+
+.mascot {
+  overflow: visible;
+}
+.mascot-fur {
+  fill: #fff;
+}
+.mascot-inner {
+  fill: #a9c4f5;
+}
+.mascot-ink {
+  fill: var(--navy);
+}
+.mascot-glint {
+  fill: #fff;
+}
+.mascot-brow,
+.mascot-strap,
+.mascot-mouth {
+  fill: none;
+  stroke: var(--navy);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mascot-mouth {
+  stroke-width: 2.6;
+}
+.mascot-collar {
+  fill: var(--mint);
+}
+.mascot-tag {
+  fill: var(--mint);
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+.mascot-tail {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 11;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: 0 100%;
+  animation: tail 4.2s ease-in-out infinite;
+}
+.mascot-eye,
+.mascot-ear {
+  transform-box: fill-box;
+}
+.mascot-eye {
+  transform-origin: center;
+  animation: blink 4.8s linear infinite;
+}
+.mascot-ear {
+  transform-origin: 30% 100%;
+  animation: ear 5.5s ease-in-out infinite;
+}
+
+/* --- Un jeu, une table : le papier à gauche, la mer à droite ------------------------ */
+
+.game,
+.table,
+.profile {
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+.back {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+  font-weight: 500;
+}
+.paper h1 {
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+.paper h2 {
+  margin: 2rem 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+.pitch {
+  margin: 0.9rem 0 1.5rem;
+  color: var(--ink-soft);
+  font-size: 1.125rem;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  padding-block: 1rem;
+  border-block: 1px solid var(--line);
+}
+.facts dt {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+.facts dd {
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+.box {
+  display: grid;
+  place-items: center;
+  min-height: min(34rem, 70vh);
+  padding: 2rem;
+}
+.box .art {
+  width: min(60%, 17rem);
+}
+
+.stage {
+  padding: clamp(3.75rem, 7vw, 5rem) clamp(2.5rem, 7vw, 5.5rem) 1.5rem;
+}
+.round {
+  position: relative;
+  aspect-ratio: 5 / 4;
+  /* La table tient dans la hauteur de la fenêtre. */
+  max-width: min(38rem, calc((100dvh - 19rem) * 5 / 4));
+  min-width: min(100%, 16rem);
+  margin: 0 auto;
+}
+.table-top {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--veil);
+}
+/* Les rhumbs d'une carte marine, au même niveau que le semis de points. */
+.table-top::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background: repeating-conic-gradient(#fff 0 0.35deg, transparent 0.35deg 22.5deg);
+}
+.seat {
+  position: absolute;
+  width: 3.5rem;
+  height: 3.5rem;
+  transform: translate(-50%, -50%);
+}
+.disc {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 2px dashed rgb(255 255 255 / 0.6);
+  border-radius: 50%;
+  background: var(--sea);
+}
+.seat.taken .disc {
+  border: 0;
+  background: #fff;
+  color: var(--navy);
+  font: 900 1.5rem/1 var(--display);
+}
+/* Menthe : « celle-ci », votre place. */
+.seat.me .disc {
+  box-shadow: 0 0 0 3px var(--sea-deep), 0 0 0 6px var(--mint);
+}
+.seat-name {
+  position: absolute;
+  top: calc(100% + 0.7rem);
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.table-mid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.table-mid .art {
+  width: 3rem;
+  margin-bottom: 0.75rem;
+}
+
+.code {
+  margin: 0.1rem 0 0.9rem;
+  padding-left: 0.14em;
+  font: 900 clamp(2.75rem, 9vw, 5rem) / 1 var(--display);
+  letter-spacing: 0.14em;
+}
+
+/* --- Un profil : qui c'est sur le papier, ce qu'il a joué sur la mer ----------------- */
+
+.state {
+  font-weight: 700;
+}
+.sheet {
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+}
+.sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.5rem 2.5rem;
+  margin-bottom: 2rem;
+}
+.disc.big {
+  width: 6rem;
+  height: 6rem;
+  flex: none;
+  border: 0;
+  background: #fff;
+  color: var(--navy);
+  font: 900 3rem/1 var(--display);
+}
+.totals {
+  display: flex;
+  gap: 2.5rem;
+}
+.totals dd {
+  font: 900 clamp(2.5rem, 6vw, 3.5rem) / 1 var(--display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.totals dt {
+  margin-top: 0.3rem;
+  opacity: 0.85;
+}
+.sheet-games .art {
+  width: 3.25rem;
+}
+.sheet-games li {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 0.9rem;
+  border-top: 1px solid var(--veil-strong);
+}
+.sheet-games a {
+  color: #fff;
+  font: 800 1.2rem/1.2 var(--display);
+  text-decoration: none;
+}
+.sheet-games a:hover {
+  text-decoration: underline;
+}
+.sheet-games span {
+  opacity: 0.85;
+  text-align: right;
+}
+.sheet-note {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--veil-strong);
+  opacity: 0.85;
+}
+
+/* --- Amis : un registre, des lignes séparées par un filet --------------------------- */
+
+.friends {
+  max-width: 44rem;
+}
+.friends h1 {
+  margin-bottom: 1.5rem;
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+.friends h2 {
+  margin: 2.5rem 0 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.people li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.people li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.people a {
+  margin-right: auto;
+  color: var(--ink);
+  font-weight: 700;
+}
+.when {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+/* --- Mon compte : des formulaires simples, l'un sous l'autre ------------------------ */
+
+.account {
+  max-width: 34rem;
+}
+.account .pitch {
+  margin-top: -1rem;
+  font: 800 1.35rem/1.2 var(--display);
+  color: var(--ink);
+}
+.people li b {
+  margin-right: auto;
+}
+
+.words-count {
+  font-weight: 700;
+}
+.words-count.short {
+  color: var(--danger);
+}
+.invite .hint {
+  margin-top: 0.6rem;
+}
+.account .stack {
+  margin-top: 0.9rem;
+}
+.look-parts legend {
+  font-weight: 700;
+}
+
+.who-links {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* Créer un salon et partie rapide, côte à côte. */
+.start-go {
+  display: flex;
+  gap: 0.5rem;
+}
+.start-go .btn.primary {
+  flex: 1.6;
+  padding-inline: 1rem;
+}
+.start-go .btn.quiet {
+  flex: 1;
+  padding-inline: 0.75rem;
+  font-size: 1.05rem;
+}
+
+/* --- Avatars, atelier et objectifs ------------------------------------------------- */
+
+/* L'avatar d'un joueur : un autocollant cartoon, dessiné par web/lib/avatar.tsx. */
+.avatar {
+  display: block;
+  flex: none;
+  width: 2.75rem;
+  height: auto;
+  overflow: visible;
+}
+.avatar.big {
+  width: 7.5rem;
+}
+.who-name .avatar {
+  width: 2.75rem;
+  margin: -0.25rem 0;
+}
+.nav-count {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  opacity: 0.85;
+}
+/* Une jauge : où en est un objectif. */
+
+/* Sur l'accueil : l'avatar à côté du nom, un clic ouvre l'atelier. */
+.start-who {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.9rem;
+}
+.start-who .start-field,
+.start-who .start-name {
+  flex: 1;
+  min-width: 0;
+}
+.start-name b {
+  display: block;
+}
+.start-avatar {
+  position: relative;
+  flex: none;
+  width: 4.75rem;
+  overflow: hidden;
+  padding: 0.3rem 0.3rem 0.9rem;
+  border: 0;
+  border-radius: var(--r-panel);
+  background: var(--sea-fill);
+  color: #fff;
+}
+.start-avatar .avatar {
+  width: 100%;
+  transition: transform 0.25s var(--ease);
+}
+.start-avatar:hover:not(:disabled) .avatar {
+  animation: wobble 0.6s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.start-avatar span {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.2rem 0;
+  background: rgb(8 28 102 / 0.82);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+/* Une raison de jouer, sous la carte. */
+.nudge {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.2rem 0.9rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 1rem 0.6rem 0.6rem;
+  border-radius: var(--r-panel);
+  box-shadow: 0 0 0 1px var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  transition: box-shadow 0.15s;
+}
+.nudge:hover {
+  box-shadow: 0 0 0 2px var(--sea);
+}
+
+.nudge-text b {
+  display: block;
+  font: 800 1rem/1.25 var(--display);
+}
+.nudge-text small {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+.nudge .bar {
+  grid-column: 2;
+  color: var(--link);
+}
+.nudge:not(:has(.bar)) .nudge-text {
+  grid-row: span 2;
+}
+
+/* L'atelier : l'avatar en grand à gauche, les pièces à droite. */
+.dialog.look-dialog {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 1.75rem;
+  max-width: 56rem;
+  max-height: 94dvh;
+  overflow-y: auto;
+}
+.look-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 13rem;
+  flex: none;
+  text-align: center;
+}
+.look-side h2 {
+  align-self: flex-start;
+}
+.look-stage {
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  aspect-ratio: 1;
+}
+.look-stage .avatar {
+  width: 74%;
+  animation: pop 0.3s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+.look-name {
+  font: 800 1.2rem/1.2 var(--display);
+  overflow-wrap: anywhere;
+}
+.look-side .btn {
+  width: 100%;
+}
+/* Sept sortes de pièces : les plus fournies sur toute la largeur, les autres par deux. */
+.look-parts {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.6rem 1.25rem;
+  min-width: 0;
+}
+.look-parts > .wide,
+.look-parts > .look-hint,
+.look-parts > .row-actions {
+  grid-column: 1 / -1;
+}
+
+.look-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+/* Une pièce à choisir : dessinée seule, sur une pastille claire où son contour navy se lit
+   dans les deux thèmes. */
+.look-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  padding: 0.3rem;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--pale);
+  transition: transform 0.12s, background 0.12s;
+}
+.look-pick .part {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.look-pick:hover {
+  transform: translateY(-2px);
+  background: #fff;
+}
+/* La pièce portée : cerclée, et dite au lecteur d'écran par aria-pressed. */
+.look-pick.on {
+  background: #fff;
+  outline: 3px solid var(--link);
+  outline-offset: 1px;
+}
+.look-pick.locked .part {
+  opacity: 0.4;
+}
+.look-lock {
+  position: absolute;
+  right: 0.1rem;
+  bottom: 0.1rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0.22rem;
+  border-radius: 50%;
+  background: var(--navy);
+  fill: #fff;
+}
+.look-hint {
+  min-height: 2.8em;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.look-hint b {
+  color: var(--ink);
+}
+.look-parts .row-actions {
+  margin-top: auto;
+}
+
+/* La pièce qu'un objectif débloque, montrée seule sur une pastille claire. */
+.goal-part {
+  display: block;
+  width: 3.5rem;
+  aspect-ratio: 1;
+  padding: 0.35rem;
+  border-radius: var(--r);
+  background: var(--pale);
+}
+.goal-part .part {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.nudge .goal-part {
+  grid-row: span 2;
+  width: 3rem;
+}
+.goals-list li:not(.done) .goal-part .part {
+  opacity: 0.55;
+}
+/* La page des objectifs : le joueur sur le papier, la liste sur la mer. */
+.goals-me {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.goals-me .avatar {
+  width: 5.5rem;
+  padding: 0.3rem;
+  border-radius: var(--r-panel);
+}
+.goals-me b {
+  display: block;
+  font: 800 1.35rem/1.2 var(--display);
+}
+.goals-me span {
+  color: var(--ink-soft);
+}
+.goals .facts + .hint {
+  margin-top: 0.75rem;
+}
+.goals-list li {
+  display: grid;
+  grid-template-columns: 3.75rem minmax(0, 1fr) minmax(6rem, 9rem);
+  align-items: center;
+  gap: 1rem;
+  padding-block: 0.7rem;
+}
+.goals-list li + li {
+  border-top: 1px solid var(--veil-strong);
+}
+.goals-list .avatar {
+  width: 3.75rem;
+}
+.goal-text b {
+  display: block;
+  font: 800 1.15rem/1.2 var(--display);
+}
+.goal-text span {
+  display: block;
+}
+.goal-text small {
+  opacity: 0.8;
+}
+.goal-state {
+  display: grid;
+  gap: 0.3rem;
+  text-align: right;
+}
+.goal-state strong {
+  font: 800 1rem/1 var(--display);
+}
+/* Accompli : dit en toutes lettres, la pièce n'est plus grisée. */
+.goals-list li:not(.done) .avatar {
+  opacity: 0.6;
+}
+.goals-list li.done .goal-state strong {
+  justify-self: end;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--r-pill);
+  background: #fff;
+  color: var(--navy);
+}
+
+/* --- Pseudos animés et magasin ------------------------------------------------------ */
+
+/* Les effets de pseudo, achetés au magasin. Ils restent lisibles : le nom ne disparaît
+   jamais, et tout s'arrête si le système demande moins de mouvement. */
+.fx {
+  display: inline-block;
+}
+.fx-vague span {
+  display: inline-block;
+  animation: fx-vague 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 90ms);
+}
+@keyframes fx-vague {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-0.28em);
+  }
+}
+.fx-rebond {
+  animation: fx-rebond 1.8s cubic-bezier(0.3, 0.6, 0.3, 1) infinite;
+  transform-origin: 50% 100%;
+}
+@keyframes fx-rebond {
+  0%,
+  55%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  20% {
+    transform: translateY(-0.3em) scale(1.04, 0.96);
+  }
+  35% {
+    transform: translateY(0) scale(0.96, 1.05);
+  }
+}
+.fx-tangage {
+  animation: fx-tangage 2.6s ease-in-out infinite;
+  transform-origin: 50% 110%;
+}
+@keyframes fx-tangage {
+  0%,
+  100% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+}
+.fx-neon {
+  animation: fx-neon 1.8s ease-in-out infinite;
+}
+@keyframes fx-neon {
+  0%,
+  100% {
+    text-shadow: 0 0 0.15em var(--mint), 0 0 0.5em var(--mint);
+  }
+  50% {
+    text-shadow: 0 0 0.05em var(--mint);
+  }
+}
+.fx-arcenciel,
+.fx-or {
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fx-slide 4s linear infinite;
+}
+.fx-arcenciel {
+  background-image: linear-gradient(90deg, #ff6b5e, #ffcf3f, #5fe0a0, #35c3e6, #b9a4f5, #ff6b5e, #ffcf3f);
+}
+.fx-or {
+  background-image: linear-gradient(90deg, #e39a00, #ffd76a, #fff6c7, #ffd76a, #e39a00, #ffd76a);
+  animation-duration: 3s;
+}
+@keyframes fx-slide {
+  to {
+    background-position: -300% 0;
+  }
+}
+
+.fx-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.fx-list button {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--sea-fill);
+  color: #fff;
+  text-align: left;
+}
+.fx-list button.on {
+  outline: 3px solid var(--mint);
+  outline-offset: 2px;
+}
+.fx-list b {
+  display: block;
+  font: 800 1.05rem/1.3 var(--display);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fx-list small {
+  opacity: 0.85;
+}
+/* Le magasin. Sur le papier : la bourse, comment la remplir, l'effet du pseudo. */
+.shop .paper h2 {
+  margin-top: 1.75rem;
+}
+.purse {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+.purse-total {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.purse-total strong {
+  color: var(--ink);
+  font: 900 clamp(2.5rem, 5vw, 3.25rem) / 1 var(--display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.purse-coin {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  color: #fff;
+}
+.purse-coin .ic {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+.purse-day {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--link);
+}
+.purse-day p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+.purse-day b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.purse-day .btn {
+  justify-self: start;
+}
+.earn li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+/* Sur la mer : les articles du jour en grand, puis toute la collection en petit. */
+.shop-sea {
+  display: grid;
+  gap: 1rem;
+}
+.shop-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+.shop-head:not(:first-child) {
+  margin-top: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--veil-strong);
+}
+.shop-head h2 {
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 900;
+}
+.shop-head p {
+  opacity: 0.9;
+}
+.shop-clock {
+  margin-left: 0.25rem;
+  font: 800 1.15rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr));
+  gap: clamp(0.6rem, 1.4vw, 1rem);
+}
+.shop-item {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: var(--r-tile);
+  background: var(--veil);
+  transition: background 0.2s;
+  animation: rise 0.45s var(--ease) backwards;
+}
+.shop-item:hover {
+  background: var(--veil-strong);
+}
+.shop-kind {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+}
+/* L'article sur son présentoir : un creux de mer, et sous lui une ombre posée. */
+.shop-show {
+  grid-column: 1 / -1;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 10rem;
+  padding: 2.5rem 0.75rem 1rem;
+  border-radius: var(--r);
+  background: var(--hollow);
+  overflow: hidden;
+}
+.shop-show:has(.avatar)::after {
+  content: '';
+  position: absolute;
+  bottom: 0.7rem;
+  left: 50%;
+  width: 7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: rgb(4 16 66 / 0.45);
+  translate: -50%;
+}
+.shop-show > * {
+  position: relative;
+  z-index: 1;
+}
+.shop-show .avatar {
+  width: 7rem;
+}
+/* L'article répond au pointeur : il se dandine une fois. */
+.shop-item:hover .shop-show .avatar {
+  animation: wobble 0.6s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.shop-part {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  flex: none;
+  padding: 0.3rem;
+  border-radius: var(--r);
+  background: var(--pale);
+}
+.shop-part .part {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.shop-name {
+  align-self: center;
+  max-width: 100%;
+  font: 900 clamp(1.1rem, 1.7vw, 1.6rem) / 1.3 var(--display);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.shop-text b {
+  display: block;
+  font: 800 1.2rem/1.2 var(--display);
+}
+.shop-text small {
+  display: block;
+  line-height: 1.3;
+  opacity: 0.85;
+}
+.shop-item .btn {
+  min-width: 5.5rem;
+  font: 800 1.1rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.shop-owned {
+  justify-self: start;
+  min-height: 2.25rem;
+  padding-inline: 0.8rem;
+  font-size: 0.9375rem;
+}
+.shop-short {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.35rem;
+}
+.shop-short small {
+  opacity: 0.9;
+}
+.shop-all {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr));
+  gap: 0.5rem;
+}
+.shop-all li {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--r);
+  background: var(--veil);
+}
+.shop-all .shop-part {
+  grid-row: span 2;
+  width: 2.75rem;
+  height: 2.75rem;
+}
+.shop-aa {
+  color: var(--navy);
+  font: 900 1.15rem/1 var(--display);
+}
+.shop-all b {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shop-all small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  opacity: 0.85;
+}
+.shop-all small .ic {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+/* Pas en vente aujourd'hui : l'article s'efface, et dit qu'il reviendra. */
+.shop-all .away {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--veil-strong);
+}
+.shop-all .away .shop-part {
+  opacity: 0.6;
+}
+/* Les objectifs par groupe. */
+.goals-group + .goals-group {
+  margin-top: 1.5rem;
+}
+.goals-group h2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid #fff;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+.goals-group h2 small {
+  font: 700 0.9375rem/1 var(--body);
+  opacity: 0.85;
+}
+
+@keyframes wobble {
+  25% {
+    transform: rotate(-7deg) scale(1.06);
+  }
+  60% {
+    transform: rotate(5deg) scale(1.06);
+  }
+}
+@keyframes tail {
+  50% {
+    transform: rotate(-14deg);
+  }
+}
+@keyframes blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96.5% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes ear {
+  0%,
+  80%,
+  88%,
+  100% {
+    transform: rotate(0deg);
+  }
+  84% {
+    transform: rotate(14deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* --- Écrans étroits --------------------------------------------------------------- */
+
+/* Fenêtre un peu basse : la raison de jouer tient sur une ligne. */
+@media (max-height: 52rem) {
+  .start-card {
+    gap: 0.8rem;
+    padding: 1.25rem;
+  }
+  .nudge {
+    padding-block: 0.4rem;
+  }
+  .nudge .goal-part {
+    width: 2.5rem;
+  }
+  .nudge-text small {
+    display: none;
+  }
+}
+/* Plus basse encore : la phrase d'introduction cède la place. */
+@media (max-height: 47rem) {
+  .start-lead {
+    display: none;
+  }
+  .start h1 {
+    margin-bottom: 0.75rem;
+  }
+}
+@media (max-height: 44rem) {
+  .side .mascot {
+    display: none;
+  }
+  /* Fenêtre basse : l'accueil se resserre pour tenir sans défiler. */
+  .nudge {
+    margin-top: 0.5rem;
+    padding-block: 0.35rem;
+  }
+  .nudge .goal-part {
+    width: 2.25rem;
+  }
+  .nudge-text small {
+    display: none;
+  }
+  .start-avatar {
+    width: 4.25rem;
+  }
+  .start h1 {
+    font-size: clamp(2.5rem, 10vh, 4rem);
+  }
+  .start-lead {
+    display: none;
+  }
+  .start h1 {
+    margin-bottom: 0.75rem;
+  }
+  .start-card {
+    gap: 0.7rem;
+    padding: 1.1rem;
+  }
+  .games-lead {
+    margin-bottom: 0.7rem;
+  }
+}
+/* Écran étroit : la bande devient une barre en haut de page. */
+@media (max-width: 56rem) {
+  #app {
+    display: flex;
+    flex-direction: column;
+  }
+  .side.sea {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    height: auto;
+    padding: 0.6rem 0.9rem;
+    overflow: visible;
+  }
+  .side .mascot {
+    display: none;
+  }
+  .lockup {
+    margin-right: auto;
+  }
+  .logo {
+    width: 2rem;
+    height: 2rem;
+  }
+  #nav {
+    order: 3;
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+  }
+  #nav a {
+    flex: none;
+    min-height: 2.25rem;
+    font-size: 0.9375rem;
+  }
+  #nav hr {
+    display: none;
+  }
+  /* Le bouton « Joueurs et règles » tient sur la ligne du logo ; déplié, il prend la largeur. */
+  #side-slot:has(.open) {
+    order: 4;
+    width: 100%;
+  }
+  /* Sur un téléphone, tout tient sur une ligne : le code, le bouton, la croix. */
+  .resume {
+    order: 2;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    width: 100%;
+    padding: 0.35rem 0.4rem 0.35rem 0.8rem;
+  }
+  .resume .btn {
+    grid-area: 1 / 2;
+    margin: 0;
+  }
+  .who {
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
+    border: 0;
+  }
+  .who .btn {
+    width: auto;
+  }
+  .who-name b,
+  .who .btn.onsea {
+    display: none;
+  }
+  .home {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+  .games ul {
+    grid-template: none / minmax(0, 1fr);
+  }
+  /* Sur un téléphone, une ligne par jeu : l'illustration à gauche, le nom à côté. */
+  .games li {
+    container-type: normal;
+  }
+  .game-tile {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: center;
+    column-gap: 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .game-tile > * {
+    grid-column: 2;
+  }
+  .game-tile .art {
+    grid-area: 1 / 1 / span 2 / 2;
+    width: 4rem;
+    max-height: none;
+    margin: 0;
+  }
+  .game-tile b {
+    font-size: 1.25rem;
+  }
+  .game-tile small {
+    font-size: 0.9375rem;
+  }
+  .tile-min {
+    display: inline;
+  }
+  .game,
+  .table,
+  .profile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .invite .join-row {
+    flex-wrap: wrap;
+  }
+  .dialog.look-dialog {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .look-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+    text-align: left;
+  }
+  .look-side h2 {
+    width: 100%;
+  }
+  .look-stage {
+    width: 6.5rem;
+  }
+  .look-side .btn {
+    width: auto;
+  }
+  .look-side .hint {
+    width: 100%;
+  }
+  .goals-list li {
+    grid-template-columns: 3rem minmax(0, 1fr);
+  }
+  .goals-list .avatar {
+    width: 3rem;
+  }
+  .goal-state {
+    grid-column: 2;
+    text-align: left;
+  }
+  .goals-list li.done .goal-state strong {
+    justify-self: start;
+  }
+  .box {
+    min-height: 16rem;
+    order: -1;
+  }
+  .box .art {
+    width: 9rem;
+  }
+  .seat {
+    width: 2.6rem;
+    height: 2.6rem;
+  }
+  .seat.taken .disc {
+    font-size: 1.15rem;
+  }
+  .table-mid .art {
+    display: none;
+  }
+}
+
+/* --- Partie rapide : les salons publics, rangés par jeu ----------------------------- */
+
+.quick-games {
+  display: grid;
+  gap: 0.6rem;
+}
+.quick-game {
+  border-radius: var(--r-tile);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* Un jeu où l'on attend du monde se détache des autres. */
+.quick-game.live {
+  background: var(--tint);
+  box-shadow: none;
+}
+.quick-head {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 0.8rem;
+  padding: 0.6rem 0.75rem;
+}
+.quick-art {
+  grid-area: 1 / 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+}
+.quick-art .art {
+  width: 88%;
+}
+.quick-head h3 {
+  grid-area: 1 / 2;
+  align-self: end;
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+.quick-head small {
+  grid-area: 2 / 2;
+  align-self: start;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+.quick-head .pill {
+  grid-area: 1 / 3 / span 2;
+}
+.quick-head .btn {
+  grid-area: 1 / 4 / span 2;
+}
+.quick-game:not(.live) .pill {
+  background: none;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.quick-game.live .pill {
+  background: var(--sea);
+  color: #fff;
+}
+.quick-rooms {
+  margin: 0 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.quick-rooms > li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 6.5rem auto;
+  align-items: center;
+  column-gap: 0.8rem;
+  padding-block: 0.55rem;
+  animation: rise 0.3s var(--ease) backwards;
+}
+.quick-rooms .avatar {
+  width: 2.25rem;
+  padding: 0.1rem;
+  border-radius: 8px;
+}
+.quick-rooms p b,
+.quick-rooms p small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-rooms p small {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+.quick-seats {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--link);
+  text-align: right;
+}
+.quick-seats b {
+  color: var(--ink);
+  font: 800 1rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 40rem) {
+  .quick-head {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    row-gap: 0.4rem;
+  }
+  .quick-art {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .quick-head .btn {
+    grid-area: 3 / 1 / auto / -1;
+  }
+  .quick-rooms > li {
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+    row-gap: 0.4rem;
+  }
+  .quick-rooms .avatar {
+    grid-area: 1 / 1 / span 2;
+    align-self: start;
+  }
+  .quick-rooms p {
+    grid-area: 1 / 2;
+  }
+  .quick-seats {
+    grid-area: 2 / 2;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 0.5rem;
+  }
+  .quick-rooms .btn {
+    grid-area: 1 / 3 / span 2;
+  }
+}
+
+/* --- La page du kit ------------------------------------------------------------------ */
+
+.kit {
+  display: grid;
+  gap: 2.5rem;
+  max-width: 64rem;
+}
+.kit h1 {
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+.kit .pitch {
+  margin-bottom: 0;
+}
+.kit-piece {
+  display: grid;
+  gap: 0.75rem;
+}
+.kit-piece > h2 {
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+.kit-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+}
+.kit-demo {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+.kit-form {
+  max-width: 22rem;
+}
+.kit-chat {
+  max-width: 24rem;
+  height: 24rem;
+}
+.kit-chat .chat {
+  height: 100%;
+}
+.kit-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+}
+.kit-swatches li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+.kit-swatches i {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: var(--r);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.kit-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: var(--ink-soft);
+}
