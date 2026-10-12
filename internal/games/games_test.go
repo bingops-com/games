@@ -315,11 +315,9 @@ func TestPoudriere(t *testing.T) {
 	if g.Tick(t0.Add(-time.Second)) {
 		t.Fatal("the game moves during the countdown")
 	}
-	for cell, c := range g.grid {
-		if x, y := pdXY(cell); (x%2 == 1 && y%2 == 1) != (c == pdPillar) {
-			t.Fatalf("cell %d: %c", cell, c)
-		}
-	}
+	// Arena layouts have their own exhaustive tests. Movement needs an explicit
+	// obstacle here rather than depending on a randomly generated crate.
+	g.grid[2*pdW] = pdCrate
 	for seat, p := range g.players {
 		if g.grid[p.at()] != pdEmpty {
 			t.Fatalf("seat %d starts in a wall", seat)

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 // Les dessins des scènes, d'une même main : grille de 64, aplats blancs, détails navy, ni
 // contour ni dégradé. Ils sont blancs, donc toujours posés sur du bleu. Ce sont des pièces
@@ -102,3 +102,17 @@ export function GameArt({ id }: { id: string }) {
   const Draw = Art[id];
   return Draw ? <Draw /> : null;
 }
+
+// Décors raster générés, avec les obstacles et accessoires dans un atlas 2 × 2.
+// Le centre reste libre : seuls les éléments du moteur occupent les cases jouables.
+export type BombermatArena = 'classic' | 'crossroads' | 'bastions' | 'rings';
+
+export const BombermatArenaArt = memo(function BombermatArenaArt({ arena }: { arena: BombermatArena }) {
+  return (
+    <div className="pd-scenery" aria-hidden="true" data-scenery={arena}>
+      <div className="pd-backdrop" style={{ backgroundImage: `url('/games/bombermat/${arena}-background.webp')` }} />
+      <i className="pd-scenery-prop pd-prop-a" />
+      <i className="pd-scenery-prop pd-prop-b" />
+    </div>
+  );
+});

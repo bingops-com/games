@@ -2328,6 +2328,8 @@ button.crew-chip:hover,
 /* --- Bombermat ------------------------------------------------------------------- */
 
 .pd {
+  --pd-sprites: url('/games/bombermat/classic-sprites.webp');
+  --pd-grid-line: color-mix(in srgb, var(--navy) 16%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2346,6 +2348,18 @@ button.crew-chip:hover,
   min-height: 1.75rem;
   font-variant-numeric: tabular-nums;
 }
+.pd-location {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+.pd-map { font-weight: 700; }
+.pd-setting { opacity: 0.8; font-size: 0.8125rem; }
+.pd[data-arena='classic'] { --pd-grid-line: color-mix(in srgb, var(--pale) 18%, transparent); }
+.pd[data-arena='crossroads'] { --pd-sprites: url('/games/bombermat/crossroads-sprites.webp'); }
+.pd[data-arena='bastions'] { --pd-sprites: url('/games/bombermat/bastions-sprites.webp'); }
+.pd[data-arena='rings'] { --pd-sprites: url('/games/bombermat/rings-sprites.webp'); }
 /* Vos bonus : une pastille blanche par bonus, et son nombre. */
 .pd-stats {
   display: flex;
@@ -2408,6 +2422,7 @@ button.crew-chip:hover,
 }
 /* La grille prend la plus grande taille qui tient en largeur comme en hauteur. */
 .pd-fit {
+  position: relative;
   flex: 1;
   min-height: 8rem;
   width: 100%;
@@ -2415,14 +2430,95 @@ button.crew-chip:hover,
   place-items: center;
   container-type: size;
 }
-.pd-grid {
+@media (max-width: 40rem) {
+  .pd-setting { display: none; }
+}
+.pd-arena {
   position: relative;
-  width: min(100cqw, 100cqh * 13 / 11);
-  border-radius: 8px;
-  /* Un damier discret : une case sur deux un peu plus claire. */
-  background:
-    conic-gradient(rgb(255 255 255 / 0.05) 25%, transparent 0 50%, rgb(255 255 255 / 0.05) 0 75%, transparent 0) 0 0 / calc(200% / 13) calc(200% / 11),
-    var(--veil);
+  width: min(100cqw, 100cqh * 15 / 12);
+  aspect-ratio: 15 / 12;
+  isolation: isolate;
+  border-radius: 1rem;
+  background: var(--navy);
+}
+.pd-scenery {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  contain: layout style;
+}
+.pd-backdrop {
+  position: absolute;
+  inset: 0;
+  /* Le sol central (72 % de la source) remplit le terrain de 13/15 × 11/12.
+     On recadre la bordure extérieure, sans écraser les objets illustrés. */
+  background-size: calc(100% * 13 / 15 / 0.72) calc(100% * 11 / 12 / 0.72);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.pd-scenery-prop {
+  position: absolute;
+  width: 5%;
+  aspect-ratio: 1;
+  background-image: var(--pd-sprites);
+  background-size: 200% 200%;
+  background-repeat: no-repeat;
+  transform-origin: 50% 20%;
+}
+.pd-prop-a {
+  left: 0.5%;
+  top: 1%;
+  background-position: 0 100%;
+  animation: pd-scenery-sway 5s ease-in-out infinite alternate;
+}
+.pd-prop-b {
+  right: 0.5%;
+  bottom: 1%;
+  background-position: 100% 100%;
+  animation: pd-scenery-sway 6s ease-in-out infinite alternate-reverse;
+}
+.pd[data-arena='crossroads'] .pd-prop-a {
+  top: auto;
+  bottom: 1%;
+  animation-name: pd-scenery-bob;
+}
+.pd[data-arena='crossroads'] .pd-prop-b {
+  bottom: auto;
+  top: 1%;
+  animation-name: pd-scenery-gull;
+}
+.pd[data-arena='bastions'] .pd-scenery-prop {
+  top: 0;
+  bottom: auto;
+  animation-name: pd-scenery-banner;
+  transform-origin: 30% 90%;
+}
+.pd[data-arena='rings'] .pd-prop-b {
+  width: 3.75%;
+  right: 1%;
+  bottom: 1%;
+  animation-name: pd-scenery-crab;
+}
+@keyframes pd-scenery-sway { from { rotate: -4deg; } to { rotate: 4deg; } }
+@keyframes pd-scenery-banner { from { transform: skewY(-3deg); } to { transform: skewY(3deg); } }
+@keyframes pd-scenery-bob { from { translate: 0 -2px; rotate: -2deg; } to { translate: 0 2px; rotate: 2deg; } }
+@keyframes pd-scenery-gull { from { translate: -3px 1px; rotate: -5deg; } to { translate: 3px -1px; rotate: 5deg; } }
+@keyframes pd-scenery-crab { from { translate: -2px 0; rotate: -3deg; } to { translate: 2px 0; rotate: 3deg; } }
+.pd-grid {
+  position: absolute;
+  /* 13 × 11 cases carrées dans un cadre de 15 × 12, bordures comprises. */
+  width: calc(100% * 13 / 15);
+  left: calc(100% / 15);
+  top: calc(100% / 24);
+  /* Les traits suivent exactement les cases, sans aplat sur l'illustration. */
+  background-image:
+    linear-gradient(90deg, var(--pd-grid-line) 1px, transparent 1px),
+    linear-gradient(var(--pd-grid-line) 1px, transparent 1px);
+  background-size: var(--cw) var(--ch);
+  box-shadow: inset -1px -1px 0 var(--pd-grid-line);
   touch-action: none;
 }
 /* Une explosion secoue la grille. */
@@ -2445,35 +2541,20 @@ button.crew-chip:hover,
   width: var(--cw);
   height: var(--ch);
 }
-/* Un pilier : un bloc navy au sommet plus clair, qui ne saute jamais. Une caisse : du bois
-   clair cerclé, avec ses deux planches. Tous deux se posent à leur arrivée. */
+/* Première ligne de l'atlas : pilier indestructible, puis caisse destructible. */
 .pd-pillar::before,
 .pd-crate::before {
   content: '';
   position: absolute;
-  inset: 5%;
-  border-radius: 20%;
+  inset: -3%;
+  background-image: var(--pd-sprites);
+  background-size: 200% 200%;
+  background-repeat: no-repeat;
   animation: pd-set 0.35s var(--ease) backwards;
   animation-delay: inherit;
 }
-.pd-pillar::before {
-  background: var(--navy);
-  box-shadow: inset 0 0.22em 0 rgb(255 255 255 / 0.22), inset 0 -0.22em 0 rgb(4 16 66 / 0.5);
-}
-.pd-crate::before {
-  background: rgb(255 255 255 / 0.62);
-  box-shadow: inset 0 0 0 0.16em rgb(255 255 255 / 0.9), inset 0 -0.3em 0 rgb(11 42 148 / 0.18);
-}
-.pd-crate::after {
-  content: '';
-  position: absolute;
-  inset: 24%;
-  background:
-    linear-gradient(45deg, transparent 44%, rgb(11 42 148 / 0.32) 44% 56%, transparent 56%),
-    linear-gradient(-45deg, transparent 44%, rgb(11 42 148 / 0.32) 44% 56%, transparent 56%);
-  animation: pd-set 0.35s var(--ease) backwards;
-  animation-delay: inherit;
-}
+.pd-pillar::before { background-position: 0% 0%; }
+.pd-crate::before { background-position: 100% 0%; }
 @keyframes pd-set {
   from {
     opacity: 0;
@@ -2949,6 +3030,19 @@ button.crew-chip:hover,
 .pd-legend .out {
   opacity: 0.55;
   text-decoration: line-through;
+}
+.pd-legend-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 40rem) {
+  .pd-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 0.25rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+  .pd-legend li { min-width: 0; }
+  .pd-legend .avatar { width: 1.4rem; flex-shrink: 0; }
+  .pd-legend .swatch { flex-shrink: 0; }
 }
 .swatch {
   width: 1.15rem;
