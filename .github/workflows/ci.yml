@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -49,6 +50,10 @@ jobs:
       - name: Build the web UI
         run: make web
 
+      - name: Audit locked web dependencies
+        working-directory: web
+        run: npm audit --package-lock-only --audit-level=high
+
       - name: Vet and typecheck
         run: |
           go vet ./...
@@ -57,8 +62,39 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+      - name: Check reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
       - name: Lint the Helm chart
-        run: helm lint chart
+        run: bash chart/tests/check.sh
 
       - name: Build the server
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/games ./cmd/games
+
+  image:
+    name: Scan and publish immutable image
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/bingops-com/games:sha-${{ github.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build --pull --tag "$IMAGE" .
+
+      - name: Refuse high and critical image vulnerabilities
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock:ro aquasec/trivy:0.66.0 image --image-src docker --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$IMAGE"
+
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish commit image
+        run: docker push "$IMAGE"

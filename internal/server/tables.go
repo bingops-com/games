@@ -47,12 +47,18 @@ func (s *Server) openTable(w http.ResponseWriter, r *http.Request) (any, error) 
 
 // rooms lists the public rooms waiting for players.
 func (s *Server) rooms(w http.ResponseWriter, r *http.Request) (any, error) {
+	if !s.lookupLimit.allow(s.clientIP(r)) {
+		return nil, httpError{http.StatusTooManyRequests, "Trop de demandes, réessayez dans un instant"}
+	}
 	return map[string]any{"rooms": s.hub.Public()}, nil
 }
 
 func tableCode(raw string) string { return strings.ToUpper(strings.TrimSpace(raw)) }
 
 func (s *Server) table(w http.ResponseWriter, r *http.Request) (any, error) {
+	if !s.lookupLimit.allow(s.clientIP(r)) {
+		return nil, httpError{http.StatusTooManyRequests, "Trop de demandes, réessayez dans un instant"}
+	}
 	t := s.hub.Get(tableCode(r.PathValue("code")))
 	if t == nil {
 		return nil, httpError{http.StatusNotFound, "Aucun salon ne porte ce code"}
@@ -87,6 +93,11 @@ func (s *Server) who(r *http.Request) (room.Who, error) {
 
 // socket connects a player to a table for as long as the page stays open.
 func (s *Server) socket(w http.ResponseWriter, r *http.Request) {
+	ip := s.clientIP(r)
+	if !s.socketLimit.allow(ip) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Trop de connexions, réessayez dans un instant"})
+		return
+	}
 	t := s.hub.Get(tableCode(r.URL.Query().Get("code")))
 	if t == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Aucun salon ne porte ce code"})
@@ -97,6 +108,32 @@ func (s *Server) socket(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invité inconnu"})
 		return
 	}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	token := ""
+	if who.UserID != "" {
+		cookie, _ := r.Cookie(cookieName)
+		token = tokenHash(cookie.Value)
+	}
+	lease, ok := s.sockets.acquire(ip, who.ID, who.UserID, token, cancel)
+	if !ok {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Trop de connexions ouvertes"})
+		return
+	}
+	defer s.sockets.release(lease)
+	var expires time.Time
+	if token != "" {
+		// Register first, then validate again: logout cannot race admission.
+		expires, err = s.store.SessionExpires(ctx, token, who.UserID)
+		if err != nil || ctx.Err() != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Connexion requise"})
+			return
+		}
+	}
+	if !expires.IsZero() {
+		timer := time.AfterFunc(time.Until(expires), cancel)
+		defer timer.Stop()
+	}
 	// Accept refuses a page from another origin.
 	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
@@ -104,15 +141,13 @@ func (s *Server) socket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 	conn.SetReadLimit(socketMax)
-	c, err := t.Join(who)
+	c, err := t.JoinContext(ctx, who)
 	if err != nil {
 		conn.Close(websocket.StatusPolicyViolation, err.Error())
 		return
 	}
 	defer c.Close()
 
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 	go func() {
 		defer cancel()
 		ping := time.NewTicker(25 * time.Second)
@@ -146,17 +181,17 @@ func (s *Server) socket(w http.ResponseWriter, r *http.Request) {
 	tokens, last := float64(socketBurst), time.Now()
 	for {
 		_, msg, err := conn.Read(ctx)
-		if err != nil {
+		if err != nil || ctx.Err() != nil || (!expires.IsZero() && !time.Now().Before(expires)) {
 			return
 		}
 		now := time.Now()
 		tokens = min(socketBurst, tokens+now.Sub(last).Seconds()*socketRate)
 		last = now
-		if tokens < 1 {
+		if tokens < 1 || !s.messageLimit.allow(who.ID) || !s.ipMessageLimit.allow(ip) {
 			conn.Close(websocket.StatusPolicyViolation, "Trop de messages")
 			return
 		}
 		tokens--
-		c.Handle(msg)
+		c.HandleContext(ctx, msg)
 	}
 }

@@ -299,13 +299,33 @@ func (s *Store) SetAvatar(ctx context.Context, userID, avatar string) error {
 
 // SetEmail saves the address of an account. Another address is one its owner
 // has not confirmed yet.
-func (s *Store) SetEmail(ctx context.Context, userID, email string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE users SET email_checked = email_checked AND lower(email) = lower($1), email = $1 WHERE id = $2", email, userID)
+func (s *Store) SetEmail(ctx context.Context, userID, email, passwordHash string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// Updating the account locks it before touching tokens, just like reset.
+	res, err := tx.ExecContext(ctx, "UPDATE users SET email_checked = email_checked AND lower(email) = lower($1), email = $1 WHERE id = $2 AND password = $3", email, userID, passwordHash)
 	var pg *pgconn.PgError
 	if errors.As(err, &pg) && pg.Code == "23505" {
 		return ErrEmailUsed
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n != 1 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE user_id = $1", userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM email_checks WHERE user_id = $1", userID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (*User, error) {
@@ -320,6 +340,13 @@ func (s *Store) CreateCheck(ctx context.Context, userID, email, tokenHash string
 		return err
 	}
 	defer tx.Rollback()
+	var current string
+	if err := tx.QueryRowContext(ctx, "SELECT email FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&current); err != nil {
+		return err
+	}
+	if !strings.EqualFold(current, email) {
+		return ErrNotFound
+	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM email_checks WHERE user_id = $1 OR expires_at < $2", userID, now()); err != nil {
 		return err
 	}
@@ -332,30 +359,52 @@ func (s *Store) CreateCheck(ctx context.Context, userID, email, tokenHash string
 // ConfirmEmail marks the address a link was sent to as confirmed, if the
 // account still has it, and returns the address.
 func (s *Store) ConfirmEmail(ctx context.Context, tokenHash string) (string, error) {
-	var email string
-	err := s.db.QueryRowContext(ctx, `UPDATE users u SET email_checked = TRUE FROM email_checks c
-		WHERE c.token_hash = $1 AND c.expires_at > $2 AND u.id = c.user_id AND lower(u.email) = lower(c.email)
-		RETURNING u.email`, tokenHash, now()).Scan(&email)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
-	_, err = s.db.ExecContext(ctx, "DELETE FROM email_checks WHERE token_hash = $1", tokenHash)
-	return email, err
+	defer tx.Rollback()
+	var id, current, email string
+	if err := tx.QueryRowContext(ctx, "SELECT user_id FROM email_checks WHERE token_hash = $1", tokenHash).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrNotFound
+		}
+		return "", err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT email FROM users WHERE id = $1 FOR UPDATE", id).Scan(&current); err != nil {
+		return "", err
+	}
+	if err := tx.QueryRowContext(ctx, "DELETE FROM email_checks WHERE token_hash = $1 AND expires_at > $2 RETURNING email", tokenHash, now()).Scan(&email); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrNotFound
+		}
+		return "", err
+	}
+	if !strings.EqualFold(current, email) {
+		return "", ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE users SET email_checked = TRUE WHERE id = $1", id); err != nil {
+		return "", err
+	}
+	return current, tx.Commit()
 }
 
 // SetPassword changes the password of an account and closes every session
 // but the one named by keep (none when it is empty).
-func (s *Store) SetPassword(ctx context.Context, userID, password, keep string) error {
+func (s *Store) SetPassword(ctx context.Context, userID, password, keep, passwordHash string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "UPDATE users SET password = $1 WHERE id = $2", password, userID); err != nil {
+	res, err := tx.ExecContext(ctx, "UPDATE users SET password = $1 WHERE id = $2 AND password = $3", password, userID, passwordHash)
+	if err != nil {
 		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n != 1 {
+		return ErrNotFound
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2", userID, keep); err != nil {
 		return err
@@ -366,15 +415,25 @@ func (s *Store) SetPassword(ctx context.Context, userID, password, keep string) 
 	return tx.Commit()
 }
 
-// CreateReset remembers a link to choose a new password; an account has one
-// at a time.
-func (s *Store) CreateReset(ctx context.Context, userID, tokenHash string, expires time.Time) error {
+// CreateReset preserves earlier unexpired links: an anonymous request must
+// not invalidate the link its owner is already using. A successful reset
+// consumes every outstanding link for that account.
+func (s *Store) CreateReset(ctx context.Context, userID, email, tokenHash string, expires time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE user_id = $1 OR expires_at < $2", userID, now()); err != nil {
+	// Mail is asynchronous: the address may have changed since it was read.
+	var current string
+	var checked bool
+	if err := tx.QueryRowContext(ctx, "SELECT email, email_checked FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&current, &checked); err != nil {
+		return err
+	}
+	if current == "" || !checked || !strings.EqualFold(current, email) {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE expires_at < $1", now()); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, $3)", tokenHash, userID, expires.UnixMilli()); err != nil {
@@ -383,7 +442,8 @@ func (s *Store) CreateReset(ctx context.Context, userID, tokenHash string, expir
 	return tx.Commit()
 }
 
-// ResetUser returns the account a live link belongs to.
+// ResetUser is a cheap precheck, not authorization to update a password.
+// ResetPassword revalidates and consumes the token atomically.
 func (s *Store) ResetUser(ctx context.Context, tokenHash string) (string, error) {
 	var id string
 	err := s.db.QueryRowContext(ctx, "SELECT user_id FROM password_resets WHERE token_hash = $1 AND expires_at > $2", tokenHash, now()).Scan(&id)
@@ -391,6 +451,43 @@ func (s *Store) ResetUser(ctx context.Context, tokenHash string) (string, error)
 		err = ErrNotFound
 	}
 	return id, err
+}
+
+// ResetPassword consumes a link, changes the password and revokes sessions in
+// one transaction. Account-first locking also serializes email changes and
+// new links without deadlocking concurrent resets.
+func (s *Store) ResetPassword(ctx context.Context, tokenHash, password string) (string, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	var id, locked string
+	if err := tx.QueryRowContext(ctx, "SELECT user_id FROM password_resets WHERE token_hash = $1", tokenHash).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrNotFound
+		}
+		return "", err
+	}
+	if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
+		return "", err
+	}
+	if err := tx.QueryRowContext(ctx, "DELETE FROM password_resets WHERE token_hash = $1 AND expires_at > $2 RETURNING user_id", tokenHash, now()).Scan(&locked); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrNotFound
+		}
+		return "", err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE users SET password = $1 WHERE id = $2", password, id); err != nil {
+		return "", err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE user_id = $1", id); err != nil {
+		return "", err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id); err != nil {
+		return "", err
+	}
+	return id, tx.Commit()
 }
 
 // ---------- blocks and reports ----------
@@ -448,9 +545,10 @@ func (s *Store) DeleteRoom(ctx context.Context, code string) error {
 	return err
 }
 
-// Rooms returns the saved rooms touched since a moment, by code.
+// Rooms expires only rooms saved as empty. A connected lobby may go hours
+// without a configuration change and must still survive a restart.
 func (s *Store) Rooms(ctx context.Context, since time.Time) (map[string][]byte, error) {
-	if _, err := s.db.ExecContext(ctx, "DELETE FROM rooms WHERE updated_at < $1", since.UnixMilli()); err != nil {
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM rooms WHERE updated_at < $1 AND NOT COALESCE((state->>'occupied')::boolean, false)", since.UnixMilli()); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT code, state FROM rooms")
@@ -529,9 +627,42 @@ func (s *Store) CreateSession(ctx context.Context, userID, tokenHash string, exp
 	return err
 }
 
+// CreateSessionForPassword serializes session creation with password changes.
+// Hashing happens outside the transaction: a stale successful password check
+// must not create a new session after reset has revoked the old sessions.
+func (s *Store) CreateSessionForPassword(ctx context.Context, userID, tokenHash, passwordHash string, expires time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var current string
+	if err := tx.QueryRowContext(ctx, "SELECT password FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&current); err != nil {
+		return err
+	}
+	if current != passwordHash {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)", tokenHash, userID, expires.UnixMilli()); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM sessions WHERE token_hash = $1", tokenHash)
 	return err
+}
+
+// SessionExpires is checked after registering a socket, closing the admission
+// race with logout/password changes; expiry also closes idle sockets.
+func (s *Store) SessionExpires(ctx context.Context, tokenHash, userID string) (time.Time, error) {
+	var expires int64
+	err := s.db.QueryRowContext(ctx, "SELECT expires_at FROM sessions WHERE token_hash = $1 AND user_id = $2 AND expires_at > $3", tokenHash, userID, now()).Scan(&expires)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return time.UnixMilli(expires), err
 }
 
 // PurgeSessions forgets the sessions that have expired.

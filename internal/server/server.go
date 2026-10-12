@@ -31,13 +31,14 @@ const (
 )
 
 type Config struct {
+	// Production rejects incomplete mail and canonical-URL configuration.
+	Production bool
 	// TrustProxy says a reverse proxy sits in front and sets X-Forwarded-For
 	// and X-Forwarded-Proto. Never set it when the server is reached directly.
 	TrustProxy bool
 	Log        *slog.Logger
-	// Mail sends the links to choose a new password; nil writes them to the
-	// log. PublicURL is the address players reach the site at, for those
-	// links; empty takes it from the request.
+	// Mail sends recovery links. Nil disables mail without logging its content.
+	// PublicURL is canonical and never comes from a request header.
 	Mail      mail.Sender
 	PublicURL string
 }
@@ -49,21 +50,28 @@ type Server struct {
 	hub   *room.Hub
 	// Sign-ups and logins per address, invitations per account, tables
 	// opened per address.
-	authLimit   *limiter
-	inviteLimit *limiter
-	tableLimit  *limiter
-	reportLimit *limiter
-	presence    *presence
-	handler     http.Handler
+	authLimit      *limiter
+	inviteLimit    *limiter
+	tableLimit     *limiter
+	reportLimit    *limiter
+	authGlobal     *limiter
+	recoveryLimit  *limiter
+	lookupLimit    *limiter
+	socketLimit    *limiter
+	messageLimit   *limiter
+	ipMessageLimit *limiter
+	sockets        liveSockets
+	presence       *presence
+	handler        http.Handler
 }
 
 // New builds the server. web holds the built interface.
 func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	if cfg.Log == nil {
 		cfg.Log = slog.Default()
-	}
-	if cfg.Mail == nil {
-		cfg.Mail = mail.Log{Log: cfg.Log}
 	}
 	files, err := newStatic(web)
 	if err != nil {
@@ -71,12 +79,18 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 	}
 	s := &Server{
 		cfg: cfg, store: st, log: cfg.Log,
-		authLimit:   newLimiter(30.0/600, 30), // 30 attempts, then one every 20 s
-		inviteLimit: newLimiter(1.0/30, 20),   // 20 invitations, then one every 30 s
-		tableLimit:  newLimiter(1.0/20, 10),   // 10 tables, then one every 20 s
-		reportLimit: newLimiter(1.0/120, 5),   // 5 reports, then one every 2 min
-		hub:         room.NewHub(cfg.Log),
-		presence:    newPresence(),
+		authLimit:      newLimiter(30.0/600, 30), // 30 attempts, then one every 20 s
+		inviteLimit:    newLimiter(1.0/30, 20),   // 20 invitations, then one every 30 s
+		tableLimit:     newLimiter(1.0/20, 10),   // 10 tables, then one every 20 s
+		reportLimit:    newLimiter(1.0/120, 5),   // 5 reports, then one every 2 min
+		authGlobal:     newLimiter(8, 32),        // Bound expensive password checks across addresses.
+		recoveryLimit:  newLimiter(1.0/300, 1),   // One recovery email per account every five minutes.
+		lookupLimit:    newLimiter(2, 20),
+		socketLimit:    newLimiter(1, 12),
+		messageLimit:   newLimiter(socketRate, socketBurst),
+		ipMessageLimit: newLimiter(300, 600),
+		hub:            room.NewHub(cfg.Log),
+		presence:       newPresence(),
 	}
 	s.hub.Record = func(userID, game string, won bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -156,6 +170,10 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", sameOrigin.Handler(api))
+	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		io.WriteString(w, "ok\n")
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := st.Ping(r.Context()); err != nil {
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
@@ -195,9 +213,14 @@ func (s *Server) Housekeeping(ctx context.Context) {
 				s.log.Error("purge sessions", "err", err)
 			}
 			s.authLimit.sweep()
+			s.recoveryLimit.sweep()
 			s.inviteLimit.sweep()
 			s.tableLimit.sweep()
 			s.reportLimit.sweep()
+			s.lookupLimit.sweep()
+			s.socketLimit.sweep()
+			s.messageLimit.sweep()
+			s.ipMessageLimit.sweep()
 			s.hub.Sweep()
 			s.presence.sweep()
 		}
@@ -302,7 +325,8 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) secure(r *http.Request) bool {
-	return r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https")
+	// Production cookies must never be downgraded by a missing proxy header.
+	return s.cfg.Production || r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https")
 }
 
 func (s *Server) clientIP(r *http.Request) string {
@@ -396,13 +420,16 @@ func tokenHash(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *Server) openSession(w http.ResponseWriter, r *http.Request, userID string) error {
+func (s *Server) openSession(w http.ResponseWriter, r *http.Request, userID, passwordHash string) error {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return err
 	}
 	token := hex.EncodeToString(raw)
-	if err := s.store.CreateSession(r.Context(), userID, tokenHash(token), time.Now().Add(sessionLife)); err != nil {
+	if err := s.store.CreateSessionForPassword(r.Context(), userID, tokenHash(token), passwordHash, time.Now().Add(sessionLife)); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return errAuth
+		}
 		return err
 	}
 	// Lax, not Strict: a profile link opened from a chat must still show the
@@ -440,7 +467,7 @@ func (s *Server) signedIn(r *http.Request) (*store.User, error) {
 }
 
 func (s *Server) throttleAuth(r *http.Request) error {
-	if !s.authLimit.allow(s.clientIP(r)) {
+	if !s.authLimit.allow(s.clientIP(r)) || !s.authGlobal.allow("all") {
 		return httpError{http.StatusTooManyRequests, "Trop de tentatives, réessayez plus tard"}
 	}
 	return nil
@@ -467,7 +494,8 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 	if !validEmail(email) {
 		return nil, bad("Cette adresse e-mail n'est pas valable")
 	}
-	u, err := s.store.CreateUser(r.Context(), c.Name, hashPassword(c.Password), email)
+	passwordHash := hashPassword(c.Password)
+	u, err := s.store.CreateUser(r.Context(), c.Name, passwordHash, email)
 	if errors.Is(err, store.ErrNameTaken) {
 		return nil, httpError{http.StatusConflict, "Ce pseudo est déjà pris"}
 	}
@@ -477,7 +505,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := s.openSession(w, r, u.ID); err != nil {
+	if err := s.openSession(w, r, u.ID, passwordHash); err != nil {
 		return nil, err
 	}
 	s.sendCheck(r, u)
@@ -502,7 +530,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) (any, error) {
 	if len(c.Password) > 128 || !checkPassword(hash, c.Password) || id == "" {
 		return nil, httpError{http.StatusUnauthorized, "Pseudo ou mot de passe incorrect"}
 	}
-	if err := s.openSession(w, r, id); err != nil {
+	if err := s.openSession(w, r, id, hash); err != nil {
 		return nil, err
 	}
 	u, err := s.store.User(r.Context(), id)
@@ -517,6 +545,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) (any, error) {
 		if err := s.store.DeleteSession(r.Context(), tokenHash(c.Value)); err != nil {
 			return nil, err
 		}
+		s.sockets.revoke(tokenHash(c.Value), "", "")
 	}
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: s.secure(r)})
 	return struct{}{}, nil

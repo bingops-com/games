@@ -10,7 +10,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 # 2. The server, with the interface embedded.
-FROM golang:1.26 AS build
+FROM golang:1.26.9 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

@@ -1,0 +1,47 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "games.fullname" . }}
+  labels:
+    {{- include "games.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "games.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 3778
+  egress:
+    - to:
+        {{- toYaml .Values.networkPolicy.dnsTo | nindent 8 }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        {{- if .Values.networkPolicy.databaseTo }}
+        {{- toYaml .Values.networkPolicy.databaseTo | nindent 8 }}
+        {{- else if .Values.database.cnpg.enabled }}
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "games.postgresql" . }}
+        {{- else }}
+        {{- fail "networkPolicy.databaseTo is required for an external database" }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- if .Values.mail.relay }}
+    - to:
+        {{- toYaml .Values.networkPolicy.smtpTo | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.smtpPort }}
+    {{- end }}
+{{- end }}

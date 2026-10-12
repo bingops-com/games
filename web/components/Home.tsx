@@ -126,7 +126,7 @@ export default function Home() {
           <form className="start-join" onSubmit={join}>
             <label htmlFor="code">{t('Rejoindre avec un code', 'Join with a code')}</label>
             <div className="join-row">
-              <input id="code" className="code-field" value={code} onChange={(e) => setCode(cleanCode(e.target.value))} placeholder="ABCD" autoComplete="off" autoCapitalize="characters" spellCheck={false} />
+              <input id="code" className="code-field" value={code} onChange={(e) => setCode(cleanCode(e.target.value))} placeholder="ABCDEFGH" maxLength={CODE_LENGTH} autoComplete="off" autoCapitalize="characters" spellCheck={false} />
               <button className="btn quiet" disabled={!ready || busy}><Ic name="enter" />{t('Rejoindre', 'Join')}</button>
             </div>
           </form>

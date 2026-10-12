@@ -1,3 +1,4 @@
+{{- include "games.validate" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +7,8 @@ metadata:
     {{- include "games.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "games.selectorLabels" . | nindent 6 }}
@@ -19,15 +22,18 @@ spec:
       {{- end }}
     spec:
       automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: games
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "games.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            - name: GAMES_PRODUCTION
+              value: {{ include "games.production" . | quote }}
             - name: GAMES_ADDR
               value: ":3778"
             - name: GAMES_TRUST_PROXY
@@ -48,11 +54,35 @@ spec:
               value: {{ .Values.mail.from | quote }}
             - name: GAMES_MAIL_ENVELOPE
               value: {{ .Values.mail.envelope | quote }}
+            - name: GAMES_SMTP_REQUIRE_TLS
+              value: "true"
+            {{- if .Values.mail.existingSecret }}
+            - name: GAMES_SMTP_USER
+              {{- if .Values.mail.username }}
+              value: {{ .Values.mail.username | quote }}
+              {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mail.existingSecret }}
+                  key: username
+              {{- end }}
+            - name: GAMES_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mail.existingSecret }}
+                  key: password
+            {{- end }}
             {{- end }}
           ports:
             - name: http
               containerPort: 3778
           # /healthz answers "ok" only while the database does.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 3
+            failureThreshold: 40
           readinessProbe:
             httpGet:
               path: /healthz
@@ -61,7 +91,7 @@ spec:
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /livez
               port: http
             initialDelaySeconds: 30
             periodSeconds: 30

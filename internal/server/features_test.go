@@ -58,6 +58,7 @@ func TestAccountRecovery(t *testing.T) {
 	box := &outbox{}
 	ts := startOn(t, testStore(t), box)
 	c := player(t, ts, "Bing")
+	box.wait(t, 1) // Finish the first asynchronous confirmation before changing its address.
 	guest := player(t, ts, "")
 
 	// Each account is mailed a link to confirm the address it gave.
@@ -172,6 +173,9 @@ func TestRoomLife(t *testing.T) {
 	bing, guest := player(t, ts, "Bing"), player(t, ts, "")
 	code := bing.want(200, "POST", "/api/tables", `{"game":"meche","public":true}`)["code"].(string)
 	nextB, sendB := bing.seat(code, "")
+	// The HTTP upgrade completes before admission. Wait for the first player
+	// to join before connecting the guest so host ownership is deterministic.
+	until(t, nextB, func(s map[string]any) bool { return s["t"] == "state" })
 	nextG, sendG := guest.seat(code, "mousse-0123456789abcdef")
 	var guestID string
 	until(t, nextG, func(s map[string]any) bool {

@@ -33,6 +33,17 @@ func validPoints(p string) bool {
 			return false
 		}
 	}
+	for i := 0; i < len(p); i += 2 {
+		digit := func(c byte) int {
+			if c <= '9' {
+				return int(c - '0')
+			}
+			return int(c-'a') + 10
+		}
+		if digit(p[i])*36+digit(p[i+1]) > 999 {
+			return false
+		}
+	}
 	return true
 }
 

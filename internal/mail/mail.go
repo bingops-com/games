@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"mime"
@@ -30,15 +31,19 @@ type SMTP struct {
 	// From is the sender a reader sees; Envelope is where bounces go, and the
 	// name SPF is checked against.
 	From, Envelope string
+	// Production requires STARTTLS; plaintext is only an explicit local option.
+	RequireTLS bool
 }
 
-// Log writes messages to the log instead of sending them: what runs when no
-// relay is configured, so that a developer can still follow a link.
+// Log is a safe sink for callers that previously selected a logging sender.
+// Never log recipients, subjects, message bodies or bearer links.
 type Log struct{ Log *slog.Logger }
 
+var ErrDisabled = errors.New("mail is disabled: configure an SMTP relay")
+
 func (l Log) Send(_ context.Context, to, subject, text string) error {
-	l.Log.Info("mail not sent: no relay configured (GAMES_SMTP_ADDR)", "to", to, "subject", subject, "text", text)
-	return nil
+	l.Log.Warn("mail not sent: no relay configured (GAMES_SMTP_ADDR)")
+	return ErrDisabled
 }
 
 func (s SMTP) Send(ctx context.Context, to, subject, text string) error {
@@ -59,9 +64,11 @@ func (s SMTP) Send(ctx context.Context, to, subject, text string) error {
 	}
 	defer c.Close()
 	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
 			return err
 		}
+	} else if s.RequireTLS {
+		return errors.New("mail: SMTP relay must support STARTTLS")
 	}
 	if s.User != "" {
 		if err := c.Auth(smtp.PlainAuth("", s.User, s.Password, host)); err != nil {

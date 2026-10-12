@@ -3,6 +3,10 @@
 # and come back after a restart, in their lobby: a game being played is lost.
 replicaCount: 1
 
+# Also enabled automatically whenever ingress.enabled=true. Never open the
+# service publicly with this disabled, including through a tunnel.
+production: false
+
 fullnameOverride: ""
 nameOverride: ""
 
@@ -10,6 +14,7 @@ image:
   repository: ghcr.io/bingops-com/games
   # Defaults to the chart's appVersion.
   tag: ""
+  digest: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -20,17 +25,53 @@ imagePullSecrets: []
 trustProxy: true
 
 # The address players reach the site at, written in the links sent by mail,
-# e.g. https://games.lab.bingo. Empty takes it from the request.
+# e.g. https://games.lab.bingo. Required with mail or production; never taken
+# from request headers.
 publicUrl: ""
 
 # Links to choose a new password are sent through an SMTP relay that signs
-# them (DKIM); in the lab that is relay.mail.svc:587 (labops,
-# apps/platform/mail). Without a relay the links are only written to the log.
+# them (DKIM). Use port 587 with STARTTLS. Without a relay mail is disabled,
+# never logged.
 mail:
   relay: ""
   from: noreply@games.lab.bingo
   # Where bounces go, and the name SPF is checked against.
   envelope: bounces@smtp.games.lab.bingo
+  # Optional existing Secret with username/password keys, not literal values.
+  existingSecret: ""
+  # Optional public login, e.g. resend. Otherwise read username from the Secret.
+  username: ""
+
+# The CNI must enforce NetworkPolicy. Only these proxies may reach the server.
+# Add the Cloudflare connector's namespace AND pod labels if a tunnel connects
+# directly to the service. Egress is DNS, PostgreSQL and the SMTP relay only.
+networkPolicy:
+  enabled: true
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+  dnsTo:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  # Empty selects the CNPG cluster owned by this release. Required with an
+  # external database; use explicit pod/namespace selectors or a narrow CIDR.
+  databaseTo: []
+  smtpTo:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: mail
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: relay
+  smtpPort: 587
 
 service:
   type: ClusterIP
@@ -59,6 +100,14 @@ database:
     instances: 1
     database: games
     owner: games
+    # Bootstrap a NEW cluster from existing Barman archives. Never switch the
+    # bootstrap of an already-created cluster. Empty objectStore uses the
+    # ObjectStore created by this release with the configured backup location.
+    recovery:
+      enabled: false
+      objectStore: ""
+      serverName: ""
+      targetTime: ""
     storage:
       size: 2Gi
       # Empty uses the cluster's default storage class.
@@ -84,6 +133,8 @@ database:
   existingSecret:
     name: ""
     key: uri
+    # Owning recovery runbook, required in production for an external database.
+    backupRunbook: ""
 
 resources:
   requests:
@@ -92,6 +143,7 @@ resources:
   limits:
     # A password check takes 19 MiB (Argon2id), four at once at most.
     memory: 384Mi
+    cpu: "1"
 
 podAnnotations: {}
 nodeSelector: {}
