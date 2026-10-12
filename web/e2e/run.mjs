@@ -29,7 +29,7 @@ async function player({ width = 1366, height = 768, account = '' } = {}) {
     const status = await page.evaluate(async (n) => (await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n, password: 'long enough' }) })).status, account);
     check(status === 200, `inscription de ${account} : ${status}`);
     await page.reload();
-    await page.locator('.who-name').waitFor();
+    await page.locator('.who-name').waitFor({ state: 'attached' });
   }
   return page;
 }
@@ -56,12 +56,77 @@ const start = async (host) => {
   await host.getByRole('button', { name: /Lancer la partie/ }).click();
   await host.locator('.guide').waitFor();
 };
+const openMenu = async (page) => {
+  const toggle = page.locator('.menu-toggle');
+  if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+};
 
 const scenarios = {
+  // Le code reste entier dans la bande ; le menu mobile garde navigation et compte accessibles.
+  async navigation() {
+    const { code, players: [p] } = await room('Ono', 1);
+    const fitsSidebar = () => p.locator('.room-code').evaluate((button) => {
+      const code = button.querySelector('strong');
+      const side = button.closest('aside').getBoundingClientRect();
+      const box = button.getBoundingClientRect();
+      const text = code.getBoundingClientRect();
+      return text.left >= box.left && text.right <= box.right && box.right <= side.right && code.scrollWidth <= code.clientWidth + 1;
+    });
+    check(await p.locator('.room-code strong').innerText() === code, 'code de salon incomplet');
+    check(await fitsSidebar(), 'code hors de la sidebar sur PC');
+    // Les huit caractères les plus larges doivent également tenir sans rognage.
+    await p.locator('.room-code strong').evaluate((el) => { el.textContent = 'WWWWWWWW'; });
+    check(await fitsSidebar(), 'code large hors de la sidebar sur PC');
+    await p.locator('.room-code strong').evaluate((el, code) => { el.textContent = code; }, code);
+    check(!await p.locator('.menu-toggle').isVisible(), 'burger affiché sur PC');
+    for (const width of [320, 390, 768]) {
+      await p.setViewportSize({ width, height: 800 });
+      const toggle = p.locator('.menu-toggle');
+      await toggle.waitFor();
+      check(await toggle.getAttribute('aria-label') === 'Ouvrir le menu', 'libellé du burger incorrect');
+      check(!await p.locator('#nav').isVisible() && !await p.locator('.who').isVisible(), 'menu non replié sur mobile');
+      check(await p.locator('.room-code').isVisible() && await p.locator('.room-toggle').isVisible(), 'commandes du salon masquées par le burger');
+      check((await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, `débordement à ${width}px`);
+      await toggle.focus();
+      await p.keyboard.press('Enter');
+      check(await toggle.getAttribute('aria-expanded') === 'true', 'état du menu ouvert incorrect');
+      await p.keyboard.press('Tab');
+      check(await p.locator('#nav a').first().evaluate((el) => document.activeElement === el), `navigation inaccessible au clavier à ${width}px : ${await p.evaluate(() => document.activeElement.outerHTML)}`);
+      check(await p.locator('.who').getByRole('button', { name: 'Se connecter', exact: true }).isVisible(), 'connexion absente du menu mobile');
+      check((await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, `menu débordant à ${width}px`);
+      await p.keyboard.press('Escape');
+      check(await toggle.getAttribute('aria-expanded') === 'false' && await toggle.evaluate((el) => document.activeElement === el), 'Échap ne ferme pas le menu avec retour du focus');
+      await toggle.click();
+      await p.locator('#nav a').filter({ hasText: 'Amis' }).click();
+      await p.waitForURL(BASE + '/amis/');
+      check(await toggle.getAttribute('aria-expanded') === 'false', 'menu resté ouvert après navigation');
+      await openMenu(p);
+      await p.locator('.who').getByRole('button', { name: 'Se connecter', exact: true }).click();
+      await p.getByRole('dialog', { name: 'Se connecter', exact: true }).waitFor();
+      check(await toggle.getAttribute('aria-expanded') === 'false', 'menu resté ouvert derrière le dialogue');
+      await p.keyboard.press('Escape');
+      await p.goto(`${BASE}/t/?code=${code}`);
+      await p.locator('.room-code').waitFor();
+    }
+    await openMenu(p);
+    await p.setViewportSize({ width: 1366, height: 768 });
+    check(await p.locator('#nav').isVisible() && await p.locator('.who').isVisible(), 'navigation PC masquée après redimensionnement');
+    await p.setViewportSize({ width: 390, height: 800 });
+    await p.waitForFunction(() => document.querySelector('.menu-toggle').getAttribute('aria-expanded') === 'false');
+    await openMenu(p);
+    await p.getByRole('button', { name: 'Read this site in English' }).click();
+    check(await p.getByRole('button', { name: 'Close menu', exact: true }).getAttribute('aria-expanded') === 'true', 'changement de langue a fermé le menu');
+    check(await p.locator('.who .lang').first().evaluate((el) => document.activeElement === el), 'changement de langue a perdu le focus');
+    await p.getByRole('button', { name: 'Lire ce site en français' }).click();
+    await p.locator('#view').click({ position: { x: 10, y: 10 } });
+    check(await p.locator('.menu-toggle').getAttribute('aria-expanded') === 'false', 'clic extérieur sans fermeture');
+  },
+
   // Inscription, sauvegarde des codes, récupération et rotation sur téléphone.
   async inscription() {
     const p = await player({ width: 390, height: 800 });
     const name = `e2e_${tag()}`;
+    await openMenu(p);
     await p.getByRole('button', { name: /Créer un compte/ }).first().click();
     const form = p.locator('.dialog');
     check((await form.locator('input[name=email]').count()) === 0, 'adresse encore demandée');
@@ -92,9 +157,8 @@ const scenarios = {
     await stale.evaluate(async (n) => fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n, password: 'long enough' }) }), name);
     await p.evaluate(() => fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
     await p.reload();
-    // On a phone the header exposes registration; sign-in is its second action.
-    await p.getByRole('button', { name: 'Créer un compte', exact: true }).first().click();
-    await p.getByRole('button', { name: 'J’ai déjà un compte', exact: true }).click();
+    await openMenu(p);
+    await p.getByRole('button', { name: 'Se connecter', exact: true }).click();
     await p.getByRole('button', { name: 'Mot de passe oublié ?' }).click();
     const recover = p.locator('.dialog');
     await recover.locator('input[name=name]').fill(name);
@@ -102,7 +166,7 @@ const scenarios = {
     await recover.locator('input[name=password]').fill('recovered password');
     await recover.locator('input[name=confirm]').fill('recovered password');
     await recover.getByRole('button', { name: 'Récupérer mon compte' }).click();
-    await p.locator('.who-name', { hasText: name }).waitFor();
+    await p.locator('.who-name', { hasText: name }).waitFor({ state: 'attached' });
     check(await stale.evaluate(async () => (await (await fetch('/api/me')).json()).user === null), 'ancienne session valide après récupération');
     check((await stale.evaluate(async (b) => (await fetch('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, { name, code: codes[0], password: 'reused password' })) === 400, 'code réutilisable');
     await p.goto(BASE + '/compte/');

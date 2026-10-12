@@ -62,10 +62,11 @@
 
 .room-code {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: baseline;
   column-gap: 0.6rem;
   width: 100%;
+  min-width: 0;
   padding: 0.6rem 0.8rem;
   border: 0;
   border-radius: var(--r-tile);
@@ -80,8 +81,10 @@
   opacity: 0.85;
 }
 .room-code strong {
-  font: 900 1.75rem/1 var(--display);
-  letter-spacing: 0.12em;
+  margin-top: 0.25rem;
+  font: 900 1.5rem/1.2 var(--display);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
 }
 .room-code span {
   grid-column: 1 / -1;
@@ -3010,7 +3013,7 @@ button.crew-chip:hover,
     height: auto;
   }
   .room-code {
-    flex-direction: row;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: baseline;
     gap: 0.4rem;
     width: auto;
@@ -3042,11 +3045,6 @@ button.crew-chip:hover,
   .room-body > .chat {
     flex: none;
     height: 15rem;
-  }
-  #app:has(.play) .who,
-  #app:has(.play) #nav,
-  #app:has(.play) .lockup span {
-    display: none;
   }
   /* La barre du jeu : son nom, puis ses boutons, qui passent à la ligne s'il le faut. La
      pleine fenêtre n'apporte rien quand la bande n'est déjà qu'une barre. */

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { App, NAME_MAX, profilePath, useApp, useT, type RoomInvite } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import { Name } from '@/lib/shop';
@@ -255,7 +255,7 @@ function Who() {
   const t = useT();
   const other = lang === 'fr' ? 'en' : 'fr';
   return (
-    <div className="who">
+    <div className="who" id="site-account">
       {ready && (account ? (
         <>
           <Link className="who-name" href={profilePath(account.name)}>
@@ -289,6 +289,32 @@ function Who() {
 export default function Shell({ children }: { children: ReactNode }) {
   const { toasts, full, lang } = useApp();
   const t = useT();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const sidebar = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 56rem)');
+    const resize = () => setMenuOpen(false);
+    mobile.addEventListener('change', resize);
+    return () => mobile.removeEventListener('change', resize);
+  }, []);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const escape = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      setMenuOpen(false);
+      menuButton.current?.focus();
+    };
+    const outside = (e: PointerEvent) => {
+      if (e.target instanceof Node && !sidebar.current?.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('keydown', escape);
+    document.addEventListener('pointerdown', outside);
+    return () => {
+      document.removeEventListener('keydown', escape);
+      document.removeEventListener('pointerdown', outside);
+    };
+  }, [menuOpen]);
   useEffect(() => {
     void App.start();
   }, []);
@@ -311,6 +337,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   // Les titres d'onglet sont écrits en français dans les pages ; en anglais, ceux qui
   // ne sont pas un nom de jeu sont remplacés ici.
   const path = usePathname();
+  useEffect(() => setMenuOpen(false), [path]);
   useEffect(() => {
     const en = ({ '/amis/': 'Friends', '/objectifs/': 'Objectives', '/magasin/': 'Shop', '/compte/': 'Account', '/reinitialiser/': 'New password', '/u/': 'Profile', '/t/': 'Room' } as Record<string, string>)[path];
     if (lang === 'en' && en) document.title = `${en}, lab.bingo games`;
@@ -320,12 +347,18 @@ export default function Shell({ children }: { children: ReactNode }) {
   return (
     <>
       <div id="app" className={full ? 'full' : undefined}>
-        <aside className={path === '/t/' ? 'side sea in-room' : 'side sea'}>
+        <aside ref={sidebar} className={`side sea${path === '/t/' ? ' in-room' : ''}${menuOpen ? ' menu-open' : ''}`} onClick={(e) => {
+          // Fermer aussi lors d'un lien vers la page courante ou de l'ouverture du compte.
+          if (e.target instanceof Element && e.target.closest('a, .who-links button')) setMenuOpen(false);
+        }}>
           <Link className="lockup" href="/">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="logo" src="/brand/logo.webp" alt="" width={40} height={40} />
             <span>lab.bingo <span className="lockup-kind">games</span></span>
           </Link>
+          <button ref={menuButton} type="button" className="menu-toggle" aria-expanded={menuOpen} aria-controls="nav site-account" aria-label={menuOpen ? t('Fermer le menu', 'Close menu') : t('Ouvrir le menu', 'Open menu')} onClick={() => setMenuOpen((open) => !open)}>
+            <span className="menu-bars" aria-hidden="true"><i /><i /><i /></span>
+          </button>
           <Nav />
           <Resume />
           {/* Dans un salon, la table y écrit son code et ses joueurs, sous la navigation. */}

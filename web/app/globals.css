@@ -42,6 +42,9 @@
   border-radius: 22%;
   box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.4);
 }
+.menu-toggle {
+  display: none;
+}
 #nav {
   display: flex;
   flex-direction: column;
@@ -1906,24 +1909,82 @@ img.art {
     width: 2rem;
     height: 2rem;
   }
-  #nav {
-    order: 3;
-    flex-direction: row;
-    width: 100%;
-    overflow-x: auto;
-  }
-  #nav a {
+  .menu-toggle {
+    display: grid;
+    place-items: center;
     flex: none;
-    min-height: 2.25rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 1px solid var(--veil-strong);
+    border-radius: var(--r);
+    color: #fff;
+    background: var(--veil);
+  }
+  .menu-toggle:hover {
+    background: var(--veil-strong);
+  }
+  .menu-bars {
+    display: grid;
+    gap: 0.3rem;
+    width: 1.25rem;
+  }
+  .menu-bars i {
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+  }
+  .menu-open .menu-bars {
+    position: relative;
+    height: 1.25rem;
+  }
+  .menu-open .menu-bars i {
+    position: absolute;
+    top: calc(50% - 1px);
+    width: 100%;
+    transform: rotate(45deg);
+  }
+  .menu-open .menu-bars i:nth-child(2) {
+    display: none;
+  }
+  .menu-open .menu-bars i:last-child {
+    transform: rotate(-45deg);
+  }
+  .side #nav,
+  .side .who {
+    display: none;
+  }
+  .side.menu-open #nav {
+    display: flex;
+    order: 3;
+    flex-direction: column;
+    width: 100%;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--veil-strong);
+    overflow: visible;
+  }
+  .side.menu-open #nav > a {
+    flex: none;
+    justify-content: flex-start;
+    min-height: 2.75rem;
+    padding: 0 0.6rem;
     font-size: 0.9375rem;
+  }
+  .side.in-room #nav > a > :is(span, small) {
+    display: inline;
+  }
+  .side.in-room #nav > a .pill {
+    position: static;
+    margin: 0;
   }
   #nav hr {
     display: none;
   }
-  /* Le bouton « Joueurs et règles » tient sur la ligne du logo ; déplié, il prend la largeur. */
-  #side-slot:has(.open) {
-    order: 4;
+  /* Les commandes du salon restent visibles lorsque la navigation est repliée. */
+  #side-slot {
+    order: 2;
     width: 100%;
+    min-width: 0;
   }
   /* Sur un téléphone, tout tient sur une ligne : le code, le bouton, la croix. */
   .resume {
@@ -1936,21 +1997,20 @@ img.art {
     grid-area: 1 / 2;
     margin: 0;
   }
-  .who {
+  .side.menu-open .who {
+    display: flex;
+    order: 4;
     position: static;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
     margin: 0;
-    padding: 0;
-    border: 0;
+    padding: 0.75rem 0 0;
+    border-top: 1px solid var(--veil-strong);
     background: none;
   }
   .who .btn {
     width: auto;
-  }
-  .who-name b,
-  .who .btn.onsea {
-    display: none;
   }
   .who-links {
     flex-direction: row;
