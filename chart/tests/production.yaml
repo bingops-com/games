@@ -5,6 +5,9 @@ image:
 publicUrl: https://games.example.invalid
 mail:
   relay: relay.mail.svc:587
+  serverName: smtp.games.example.invalid
+  username: games@games.example.invalid
+  existingSecret: example-smtp-credentials
 database:
   cnpg:
     backup:

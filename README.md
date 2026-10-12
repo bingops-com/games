@@ -145,7 +145,8 @@ applique les NetworkPolicy, le proxy HTTPS et un relais SMTP fonctionnel. Avec
 l'Ingress fourni : Traefik et cert-manager, émetteur `letsencrypt-cloudflare`
 (modifiable dans `ingress.annotations`). Le relais doit proposer STARTTLS avec
 un certificat d'une autorité reconnue par l'image, valide pour le nom de
-`mail.relay` ; vérifier aussi la délivrabilité et SPF/DKIM/DMARC avant ouverture.
+`mail.relay` ou de `mail.serverName` si le relais est un Service interne ;
+vérifier aussi la délivrabilité et SPF/DKIM/DMARC avant ouverture.
 
 Le chart passe automatiquement en production avec `ingress.enabled=true`.
 Pour un tunnel qui atteint directement le Service, mettre explicitement
@@ -158,6 +159,7 @@ déclarer dans la source GitOps LabOps, sans identifiants en clair :
 | `image.repository`, `image.digest` ou `image.tag` | Image GHCR épinglée par `sha256:…` ou `sha-<commit de 40 caractères>` |
 | `production`, `publicUrl`, `ingress.*` | Origine HTTPS publique ; doit correspondre à l'Ingress s'il est activé |
 | `mail.relay`, `mail.existingSecret` | Relais STARTTLS ; éventuel Secret existant avec clés `username` et `password` (ou `mail.username` public et clé `password`) |
+| `mail.serverName` | Nom DNS du certificat TLS lorsque `mail.relay` utilise un nom de Service interne ; vide : vérifie le nom du relais |
 | `networkPolicy.ingressFrom` | Namespace **et** labels des pods des seuls proxies autorisés ; adapter pour Cloudflare Tunnel |
 | `networkPolicy.dnsTo`, `databaseTo`, `smtpTo`, `smtpPort` | Sorties limitées au DNS, à PostgreSQL et au relais ; vérifier les vrais labels du cluster |
 | `database.cnpg.storage` | Taille et classe du volume de la base (2 Gi) |
@@ -330,13 +332,15 @@ compte existe, ait une adresse confirmée ou non. Un compte sans adresse
 confirmée ne se récupère pas.
 
 L'envoi passe par un relais SMTP (`GAMES_SMTP_ADDR`, `hôte:port` ; au besoin
-`GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`) ; `GAMES_MAIL_FROM` et
+`GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`). `GAMES_SMTP_SERVER_NAME` permet
+de vérifier le nom public du certificat en joignant un Service interne,
+sans désactiver la validation TLS. `GAMES_MAIL_FROM` et
 `GAMES_MAIL_ENVELOPE` donnent l'expéditeur lu et celui de l'enveloppe, et
 `GAMES_PUBLIC_URL` l'adresse du site écrite dans les liens. Sans relais, les
 liens sont seulement écrits dans le journal du serveur : c'est ce qui se passe
 en développement. Le relais du lab, sa signature DKIM et ses enregistrements
-SPF et DMARC sont dans le dépôt labops (`apps/platform/mail`,
-`terraform/cloudflare/mail.tf`).
+SPF et DMARC sont dans le dépôt labops (`apps/platform/mail/labprod`,
+`terraform/cloudflare/games-mail.tf`).
 
 ## Dans un salon
 

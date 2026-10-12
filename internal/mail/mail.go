@@ -25,6 +25,9 @@ type Sender interface {
 type SMTP struct {
 	// Addr is the relay, "host:port".
 	Addr string
+	// ServerName is the certificate's DNS name when Addr is an internal Service.
+	// Empty verifies the host in Addr. This never disables certificate checks.
+	ServerName string
 	// User and Password authenticate when the relay asks for it; empty for a
 	// relay that trusts its network.
 	User, Password string
@@ -64,7 +67,11 @@ func (s SMTP) Send(ctx context.Context, to, subject, text string) error {
 	}
 	defer c.Close()
 	if ok, _ := c.Extension("STARTTLS"); ok {
-		if err := c.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+		serverName := s.ServerName
+		if serverName == "" {
+			serverName = host
+		}
+		if err := c.StartTLS(&tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS12}); err != nil {
 			return err
 		}
 	} else if s.RequireTLS {

@@ -34,12 +34,15 @@ publicUrl: ""
 # never logged.
 mail:
   relay: ""
+  # Verify this certificate name when dialing an internal Kubernetes Service.
+  # Empty verifies the relay hostname; certificate checks are always enabled.
+  serverName: ""
   from: noreply@games.lab.bingo
   # Where bounces go, and the name SPF is checked against.
   envelope: bounces@smtp.games.lab.bingo
   # Optional existing Secret with username/password keys, not literal values.
   existingSecret: ""
-  # Optional public login, e.g. resend. Otherwise read username from the Secret.
+  # Optional public login. Otherwise read username from the Secret.
   username: ""
 
 # The CNI must enforce NetworkPolicy. Only these proxies may reach the server.

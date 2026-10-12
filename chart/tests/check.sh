@@ -14,6 +14,8 @@ grep -E -q 'kind: ScheduledBackup' "$check_dir/render.yaml"
 grep -E -q 'automountServiceAccountToken: false' "$check_dir/render.yaml"
 grep -E -q 'readOnlyRootFilesystem: true' "$check_dir/render.yaml"
 grep -E -q 'name: GAMES_PRODUCTION' "$check_dir/render.yaml"
+grep -E -A1 'name: GAMES_SMTP_SERVER_NAME' "$check_dir/render.yaml" | grep -E -q 'smtp.games.example.invalid'
+grep -E -A1 'name: GAMES_SMTP_USER' "$check_dir/render.yaml" | grep -E -q 'games@games.example.invalid'
 grep -E -A3 'livenessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /livez'
 grep -E -A3 'readinessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /healthz'
 reject() {

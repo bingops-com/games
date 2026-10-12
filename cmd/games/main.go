@@ -42,6 +42,7 @@ func serve(log *slog.Logger) error {
 	if addr := os.Getenv("GAMES_SMTP_ADDR"); addr != "" {
 		sender = mail.SMTP{
 			Addr: addr, User: os.Getenv("GAMES_SMTP_USER"), Password: os.Getenv("GAMES_SMTP_PASSWORD"),
+			ServerName: os.Getenv("GAMES_SMTP_SERVER_NAME"),
 			From:       env("GAMES_MAIL_FROM", "noreply@games.lab.bingo"),
 			Envelope:   env("GAMES_MAIL_ENVELOPE", "bounces@smtp.games.lab.bingo"),
 			RequireTLS: production || os.Getenv("GAMES_SMTP_REQUIRE_TLS") != "false",

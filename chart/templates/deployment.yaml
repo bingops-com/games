@@ -50,6 +50,10 @@ spec:
             {{- if .Values.mail.relay }}
             - name: GAMES_SMTP_ADDR
               value: {{ .Values.mail.relay | quote }}
+            {{- with .Values.mail.serverName }}
+            - name: GAMES_SMTP_SERVER_NAME
+              value: {{ . | quote }}
+            {{- end }}
             - name: GAMES_MAIL_FROM
               value: {{ .Values.mail.from | quote }}
             - name: GAMES_MAIL_ENVELOPE
