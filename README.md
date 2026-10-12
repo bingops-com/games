@@ -378,6 +378,25 @@ transaction. Le panneau ne montre ni mots de passe, ni e-mails, ni codes de
 récupération ; il ne permet pas de contourner la récupération d'un compte.
 Révoquer une session ne bannit pas le joueur : il peut se reconnecter.
 
+Le tableau de bord lit les données réelles via `GET /api/admin/analytics`,
+protégé par les mêmes contrôles Authentik. Les seules périodes acceptées sont
+7, 30 et 90 jours, aujourd'hui compris. Les agrégats PostgreSQL partagent un
+instantané cohérent en lecture seule ; les inscriptions et signalements sont
+regroupés par jour UTC, avec les jours sans événement à zéro. La journée en
+cours est incomplète, y compris pour la comparaison aux jours précédents.
+Le graphique s'explore au pointeur ou au clavier et fournit un tableau exact.
+
+Les statistiques par jeu comptent les **participations de comptes**, pas les
+parties uniques : quatre comptes dans une partie donnent quatre participations.
+Les invités en sont exclus. Ces totaux sont cumulés ; aucun historique quotidien
+de parties n'est inventé. Les comptes ayant joué sont ceux dont la dernière
+partie terminée se situe dans la période. Les sessions valides ne sont pas un
+indicateur de présence. Les salons sont un instantané en mémoire, avec invités
+et spectateurs comptés par salon. L'heure de chargement et l'actualisation
+manuelle sont affichées ; une erreur conserve les données précédentes en les
+signalant comme telles. Aucun service externe de suivi ni migration de base
+n'est ajouté.
+
 La migration additive **8** conserve les données existantes, ajoute le statut
 des signalements et le journal. Les sauvegardes PostgreSQL couvrent le journal.
 Les binaires antérieurs, y compris la version à codes de récupération, refusent
@@ -455,8 +474,8 @@ mots refusés (`internal/server/filter.go`) : un pseudo qui en contient un est
 refusé, un message voit le mot remplacé par des astérisques. Les dessins ne
 sont pas filtrés : ils se signalent. Un signalement (insultes, dessin, pseudo,
 triche, autre) est enregistré dans la table `reports`, avec les derniers
-messages du joueur dans le salon ; il n'y a pas encore d'écran pour les lire,
-ni de sanction automatique. Bloquer un compte met fin à l'amitié, empêche les
+messages du joueur dans le salon ; le panneau administrateur permet de les
+examiner et de consigner une décision, sans sanction automatique. Bloquer un compte met fin à l'amitié, empêche les
 invitations dans les deux sens et masque ses messages.
 
 ## Crédits, magasin et effets de pseudo
@@ -562,6 +581,18 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   des bonus qui sortent des caisses et dont le nom s'envole quand on les
   ramasse. Huit bonus, comme dans Bomberman : bombe, feu, patins, coup de
   pied, bombes perçantes, gilet, plein feu, et la tête de mort qui ralentit.
+  Quatre arènes sont tirées au sort à chaque nouvelle partie : Classique
+  (cale du navire), Carrefour (port), Bastions (forteresse) et Anneaux (atoll).
+  Les murs changent selon l'arène ; caisses et bonus sont régénérés en symétrie
+  et les quatre coins gardent le même refuge de départ. Chaque arène a ses
+  décors et son atlas locaux dans `web/public/games/bombermat/`. Les sources
+  et prompts sont conservés dans `art/bombermat/` ; `bash art/build-bombermat.sh`
+  prépare les WebP sans régénérer les illustrations.
+- **Administration** : navigation dédiée, bilan des participations sur fond
+  bleu, graphique des inscriptions ou signalements, classement des jeux,
+  salons et modération. Les listes de joueurs, signalements et actions gardent
+  leurs contrôles de sécurité. Les deux thèmes et le menu mobile couvrent
+  aussi cette interface.
 - **Pictogrammes** : un seul jeu, dessiné pour l'application
   (`web/lib/icons.tsx`, composant `Ic`) : grille de 24, trait aux bouts ronds
   de la couleur du texte, aplat pâle pour le volume. Leur dessin est celui que

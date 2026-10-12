@@ -372,8 +372,14 @@ func TestAdminBrowser(t *testing.T) {
 	if _, err := s.hub.Create("terre", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.store.CreateUser(context.Background(), "BrowserPlayer", "synthetic password hash", nil); err != nil {
+	user, err := s.store.CreateUser(context.Background(), "BrowserPlayer", "synthetic password hash", nil)
+	if err != nil {
 		t.Fatal(err)
+	}
+	for i, game := range []string{"terre", "terre", "meche", "poudriere"} {
+		if err := s.store.RecordGame(context.Background(), user.ID, game, i == 0); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := s.store.Report(context.Background(), "Synthetic reporter", "Synthetic player", "ABCDEFGH", "autre", "Synthetic report context"); err != nil {
 		t.Fatal(err)

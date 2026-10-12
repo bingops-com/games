@@ -32,6 +32,17 @@ func (s *Server) adminRoutes(api *http.ServeMux) {
 		}
 		return map[string]any{"counts": counts, "rooms": s.hub.AdminRooms()}, nil
 	}))
+	api.HandleFunc("GET /api/admin/analytics", s.adminHandle(false, func(ctx context.Context, r *http.Request, _ adminSession) (any, error) {
+		days := 30
+		if raw := r.URL.Query().Get("days"); raw != "" {
+			var err error
+			days, err = strconv.Atoi(raw)
+			if err != nil || (days != 7 && days != 30 && days != 90) {
+				return nil, bad("Période invalide : choisir 7, 30 ou 90 jours")
+			}
+		}
+		return s.store.AdminAnalytics(ctx, days, time.Now())
+	}))
 	api.HandleFunc("GET /api/admin/users", s.adminHandle(false, func(ctx context.Context, r *http.Request, _ adminSession) (any, error) {
 		q := strings.TrimSpace(r.URL.Query().Get("q"))
 		if utf8.RuneCountInString(q) > 16 {
