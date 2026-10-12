@@ -20,5 +20,8 @@ func (c Config) Validate() error {
 	if c.Production && c.PublicURL == "" {
 		return errors.New("GAMES_PUBLIC_URL is required in production")
 	}
+	if err := c.validateAdmin(); err != nil {
+		return err
+	}
 	return nil
 }

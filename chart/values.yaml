@@ -27,9 +27,18 @@ trustProxy: true
 # Canonical public HTTPS origin, required in production.
 publicUrl: ""
 
+# Separate Authentik OIDC session; player accounts never acquire this role.
+admin:
+  enabled: false
+  issuer: ""
+  clientId: games-admin
+  username: bingops
+  group: games-admins
+
 # The CNI must enforce NetworkPolicy. Only these proxies may reach the server.
 # Add the Cloudflare connector's namespace AND pod labels if a tunnel connects
-# directly to the service. Egress is DNS and PostgreSQL only.
+# directly to the service. Egress is DNS and PostgreSQL, plus declared HTTPS
+# peers only when the Authentik administrator panel is enabled.
 networkPolicy:
   enabled: true
   ingressFrom:
@@ -49,6 +58,8 @@ networkPolicy:
   # Empty selects the CNPG cluster owned by this release. Required with an
   # external database; use explicit pod/namespace selectors or a narrow CIDR.
   databaseTo: []
+  # Required when admin.enabled=true: HTTPS peers for the Authentik issuer.
+  adminTo: []
 
 service:
   type: ClusterIP

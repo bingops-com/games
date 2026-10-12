@@ -134,16 +134,16 @@ function Band({ st, link, report }: { st: TableState; link: TableLink; report: (
         <strong>{st.code}</strong>
         <span><Ic name="link" />{t('Copier le lien d’invitation', 'Copy invitation link')}</span>
       </button>
-      <button className="btn onsea small room-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="btn onsea small room-toggle" aria-expanded={open} aria-controls="room-details" onClick={() => setOpen(!open)}>
         {t(`${n} joueur${n > 1 ? 's' : ''}`, `${n} player${n === 1 ? '' : 's'}`)}
       </button>
-      <div className="room-body">
+      <div className="room-body" id="room-details">
         <h2>{t(`${n} joueur${n > 1 ? 's' : ''}`, `${n} player${n === 1 ? '' : 's'}`)}</h2>
         <Members st={st} send={send} report={report} />
         {/* Pendant la partie, la discussion est ici ; avant, elle est dans la salle d'attente. */}
         {playing && <RoomChat link={link} st={st} />}
-        <button className="btn onsea small room-leave" onClick={() => send({ t: 'leave' })}><Ic name="leave" />{t('Quitter le salon', 'Leave the room')}</button>
       </div>
+      <button className="btn onsea small room-leave" onClick={() => send({ t: 'leave' })}><Ic name="leave" />{t('Quitter le salon', 'Leave the room')}</button>
     </div>
   );
 }
@@ -362,7 +362,7 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
   // Échap quitte la pleine fenêtre.
   useEffect(() => {
     if (!full) return;
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && App.setFull(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('dialog[open]') && App.setFull(false);
     document.addEventListener('keydown', esc);
     return () => document.removeEventListener('keydown', esc);
   }, [full]);
@@ -371,11 +371,12 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
       <InBand><Band st={st} link={link} report={setReported} /></InBand>
       <section className={`sea board board-${playing ? game.id : 'lobby'}`} aria-label={playing ? game.name : t('Salon', 'Room')}>
         <div className="board-bar">
-          {playing ? <b>{game.name}</b> : <b>{t(`Salon ${st.code}`, `Room ${st.code}`)}</b>}
+          {playing ? <h1>{game.name}</h1> : <b>{t(`Salon ${st.code}`, `Room ${st.code}`)}</b>}
           {st.seat < 0 && playing && <span>{t('Vous regardez : vous jouerez la prochaine partie.', 'You are watching: you will play the next game.')}</span>}
           <span className="board-tools">
             {playing && <button className="btn onsea small" onClick={() => setRules(true)}><Ic name="book" />{t('Règles', 'Rules')}</button>}
             {playing && host && st.phase === 'playing' && <button className="btn onsea small" onClick={() => setStopping(true)}><Ic name="stop" />{t('Arrêter la partie', 'Stop the game')}</button>}
+            {full && <button className="btn onsea small" onClick={() => link.send({ t: 'leave' })}><Ic name="leave" />{t('Quitter le salon', 'Leave the room')}</button>}
             <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}><Ic name={full ? 'shrink' : 'expand'} />{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
           </span>
         </div>

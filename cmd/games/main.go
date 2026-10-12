@@ -38,6 +38,7 @@ func serve(log *slog.Logger) error {
 	}
 	production := os.Getenv("GAMES_PRODUCTION") == "true"
 	cfg := server.Config{Production: production, TrustProxy: os.Getenv("GAMES_TRUST_PROXY") == "true", Log: log, PublicURL: os.Getenv("GAMES_PUBLIC_URL")}
+	cfg.Admin = server.AdminConfig{Enabled: os.Getenv("GAMES_ADMIN_ENABLED") == "true", Issuer: os.Getenv("GAMES_ADMIN_ISSUER"), ClientID: env("GAMES_ADMIN_CLIENT_ID", "games-admin"), Username: env("GAMES_ADMIN_USERNAME", "bingops"), Group: env("GAMES_ADMIN_GROUP", "games-admins")}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}

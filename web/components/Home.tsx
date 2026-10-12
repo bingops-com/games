@@ -138,10 +138,10 @@ export default function Home() {
       <section className="sea games">
         <h2 id="games-title">{t('On commence par quoi ?', 'What do we start with?')}</h2>
         <p className="games-lead">{t('Vous pourrez changer de jeu dans le salon.', 'You can switch games once in the room.')}</p>
-        <ul role="radiogroup" aria-labelledby="games-title">
+        <ul aria-labelledby="games-title">
           {GAMES.map((g, i) => (
             <li key={g.id} style={{ '--i': i } as CSSProperties}>
-              <button className={`game-tile${g.id === pick ? ' on' : ''}`} role="radio" aria-checked={g.id === pick} disabled={!ready || busy} onClick={() => setPick(g.id)}>
+              <button className={`game-tile${g.id === pick ? ' on' : ''}`} aria-pressed={g.id === pick} disabled={!ready || busy} onClick={() => setPick(g.id)}>
                 <GameCover id={g.id} big />
                 <b>{g.name}</b>
                 <small>{playersOf(g, t)}<span className="tile-min">, {g.minutes} min</span></small>

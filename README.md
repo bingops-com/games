@@ -122,6 +122,10 @@ moteurs de recherche.
 | `GAMES_DATABASE_URL` | Base PostgreSQL, `postgres://user:motdepasse@hôte:5432/games` | obligatoire |
 | `GAMES_ADDR` | Adresse d'écoute | `:3778` |
 | `GAMES_TRUST_PROXY` | `true` derrière un reverse proxy qui écrit `X-Forwarded-For` et `X-Forwarded-Proto` | |
+| `GAMES_ADMIN_ENABLED` | Active le panneau Authentik séparé des comptes joueurs | `false` |
+| `GAMES_ADMIN_ISSUER` | Issuer OIDC HTTPS canonique terminé par `/` | obligatoire si activé |
+| `GAMES_ADMIN_CLIENT_ID` | Client OIDC public avec PKCE | `games-admin` |
+| `GAMES_ADMIN_USERNAME`, `GAMES_ADMIN_GROUP` | Identité et groupe administrateur tous deux obligatoires | `bingops`, `games-admins` |
 
 Ne mettez `GAMES_TRUST_PROXY=true` que si le serveur n'est joignable qu'à travers
 le proxy : sinon un client choisit l'adresse sous laquelle il est compté.
@@ -157,6 +161,7 @@ déclarer dans la source GitOps LabOps, sans identifiants en clair :
 | `production`, `publicUrl`, `ingress.*` | Origine HTTPS publique ; doit correspondre à l'Ingress s'il est activé |
 | `networkPolicy.ingressFrom` | Namespace **et** labels des pods des seuls proxies autorisés ; adapter pour Cloudflare Tunnel |
 | `networkPolicy.dnsTo`, `databaseTo` | Sorties limitées au DNS et à PostgreSQL ; vérifier les vrais labels du cluster |
+| `admin.*`, `networkPolicy.adminTo` | Panneau Authentik et destinations HTTPS explicites de son issuer ; aucun secret client |
 | `database.cnpg.storage` | Taille et classe du volume de la base (2 Gi) |
 | `database.cnpg.backup.*` | Activer sauvegarde quotidienne, archivage WAL, destination S3, Secret des clés, rétention et génération d'archive |
 | `database.cnpg.recovery.*` | Restauration déclarative d'un **nouveau** cluster depuis une génération d'archive précédente |
@@ -344,6 +349,84 @@ routes de récupération par e-mail sont désactivés. L'ancien binaire ne prend
 en charge cette nouvelle version du schéma : prévoir une maintenance et un plan
 de reprise avant toute mise en service, et ne pas rétablir l'ancienne récupération
 par mail contre cette base.
+
+## Administration Authentik
+
+`/admin/` est indépendant des comptes joueurs et désactivé par défaut. LabOps
+déclare le provider public `games-admin`, le callback strict
+`https://games.lab.bingo/api/admin/callback`, son groupe et sa policy. Seul le
+compte actif `bingops`, membre de `games-admins`, peut accéder au panneau ;
+`akadmin`, les autres utilisateurs SSO et les joueurs sont refusés. La réponse
+userinfo doit aussi contenir `games_admin: true`, calculé par le mapping LabOps
+à partir de l'identité active et du groupe courant.
+
+La connexion utilise authorization code avec PKCE S256, state lié au navigateur
+et à usage unique, nonce et vérification RS256 de l'issuer, de l'audience et de
+l'expiration. Le cookie administrateur opaque est Secure, HttpOnly et SameSite
+Lax en production ; il expire au plus tard après 15 minutes. Tokens et verifiers
+restent en mémoire serveur, bornée, sans refresh token ni stockage navigateur.
+Chaque requête protégée revérifie les droits auprès d'Authentik. Une panne ferme
+l'accès administrateur et laisse le jeu public disponible. La déconnexion locale
+ne ferme pas la session SSO Authentik. Les en-têtes d'identité du proxy ne donnent
+aucun accès. HTML, données et callback administrateur sont servis sans cache.
+
+Le panneau permet de consulter les joueurs, les métadonnées des salons et les
+signalements, de traiter/classer un signalement ou de révoquer les sessions HTTP
+et WebSocket d'un joueur. Les mutations exigent un token CSRF et un motif de
+5 à 500 caractères. Action et journal `admin_audit` sont écrits dans une même
+transaction. Le panneau ne montre ni mots de passe, ni e-mails, ni codes de
+récupération ; il ne permet pas de contourner la récupération d'un compte.
+Révoquer une session ne bannit pas le joueur : il peut se reconnecter.
+
+La migration additive **8** conserve les données existantes, ajoute le statut
+des signalements et le journal. Les sauvegardes PostgreSQL couvrent le journal.
+Les binaires antérieurs, y compris la version à codes de récupération, refusent
+ce nouveau schéma : un retour arrière exige une version compatible ou une
+restauration explicitement préparée. Les sessions administrateur disparaissent
+au redémarrage. Le runbook LabOps `apps/workloads/games/README.md` possède l'ordre
+de reconstruction et les contrôles réseau ; aucun nouveau secret n'est requis.
+Avant déploiement, publier l'image du commit Games fusionné, puis épingler ce
+même commit pour le chart et l'image LabOps. Une ancienne image n'implémente pas
+le panneau, même si `admin.enabled` est ajouté aux valeurs.
+
+Tests de sécurité : `make test` utilise une base PostgreSQL de développement et
+des schémas temporaires. Après `make web`, le parcours navigateur complet avec
+un émetteur OIDC signé isolé se lance avec :
+
+```sh
+GAMES_ADMIN_BROWSER_CHECK=true make test
+```
+
+## Accessibilité et petits écrans
+
+Les fenêtres utilisent `<dialog>` : bouton de fermeture visible, Échap, clic
+sur le fond, focus contenu dans la fenêtre puis rendu à son déclencheur. Fermer
+les codes de récupération sans les enregistrer demande une confirmation explicite
+et ne bloque plus la navigation. Le menu mobile garde la navigation et le compte
+accessibles. « Quitter le salon » reste visible lorsque les détails sont repliés,
+pendant une partie et en pleine fenêtre. Le code de huit lettres tient dans la
+sidebar. Les curseurs de réglage occupent leur propre ligne sur petit écran.
+
+Un lien « Aller au contenu » évite le header au clavier. Les pages et parties
+ont un titre principal ; les boutons graphiques ont un nom accessible, les
+sélections annoncent leur état et les scores défilants sont accessibles au
+clavier. Pour dessiner : flèches pour déplacer le pinceau, Espace ou Entrée pour
+commencer/finir un trait, Maj pour accélérer. Tab permet de quitter la feuille.
+
+L'audit Chromium/axe couvre les pages invité/connecté, les modales, les six jeux
+et les phases de dessin, de 320 px au PC, avec un format paysage. Il vérifie aussi
+le focus, la fermeture, le dessin au clavier et la sortie de salon. À lancer
+uniquement contre une instance de développement : il crée des comptes et salons
+synthétiques, et écrit les diagnostics sans HTML ni codes de récupération dans
+`/tmp/games-accessibility-report.json` (`GAMES_A11Y_REPORT` pour changer le chemin).
+
+```sh
+make e2e
+make e2e-accessibility
+```
+
+Ces contrôles automatisés ne remplacent pas une évaluation avec lecteur d'écran
+et des appareils réels ; ils ne constituent pas une certification WCAG.
 
 ## Dans un salon
 

@@ -78,7 +78,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
     <div className="skrib">
       {guide}
       <div className="sk-top">
-        <strong className={`sk-word${v.phase === 'reveal' ? ' told' : ''}`} key={v.phase === 'reveal' ? 'told' : 'word'} lang="fr" aria-label={t('Le mot à trouver', 'The word to find')}>{v.phase === 'choose' ? '' : v.word || v.mask}</strong>
+        <strong className={`sk-word${v.phase === 'reveal' ? ' told' : ''}`} key={v.phase === 'reveal' ? 'told' : 'word'} lang="fr"><span className="sr">{t('Le mot à trouver', 'The word to find')} : </span>{v.phase === 'choose' ? '' : v.word || v.mask}</strong>
         <span>{t(`Tour ${v.turn} sur ${v.turns}`, `Turn ${v.turn} of ${v.turns}`)}</span>
         {v.phase === 'draw' && (
           <span className="timer">
@@ -100,7 +100,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
           )}
         </div>
         <aside className="sk-side">
-          <ol className="sk-scores" aria-label={t('Scores', 'Scores')}>
+          <ol className="sk-scores" tabIndex={0} aria-label={t('Scores', 'Scores')}>
             {ranking.map(({ seat, score }) => (
               <li key={seat} className={`${seat === me ? 'me' : ''}${v.out[seat] ? ' out' : ''}`}>
                 <Avatar code={avatarAt(st, seat)} name={nameAt(st, seat)} />

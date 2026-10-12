@@ -347,7 +347,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
       </ul>
 
       <div className="pile">
-        <button className={mustDraw ? 'deck must' : 'deck'} disabled={!mine || v.drawn >= 0} onClick={() => act({ t: 'draw' })}>
+        <button className={mustDraw ? 'deck must' : 'deck'} aria-label={t('Piocher une carte', 'Draw a card')} disabled={!mine || v.drawn >= 0} onClick={() => act({ t: 'draw' })}>
           <span className="card card-back" aria-hidden="true" />
           <span>{t('Piocher', 'Draw')}</span>
           <small>{t(`${v.deck} carte${v.deck > 1 ? 's' : ''}`, `${v.deck} card${v.deck === 1 ? '' : 's'}`)}</small>

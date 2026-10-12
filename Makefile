@@ -33,6 +33,9 @@ test:
 e2e:
 	cd web && npm run e2e
 
+e2e-accessibility:
+	cd web && npm run e2e:accessibility
+
 check: test chart
 	go vet ./...
 	cd web && npm run typecheck

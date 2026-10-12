@@ -155,6 +155,20 @@ CREATE TABLE recovery_codes (
     token_hash TEXT NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),
     PRIMARY KEY (user_id, token_hash)
 );
+`, `
+ALTER TABLE reports ADD COLUMN status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'resolved', 'dismissed'));
+ALTER TABLE reports ADD COLUMN resolved_at BIGINT;
+CREATE INDEX reports_status ON reports (status, id DESC);
+CREATE TABLE admin_audit (
+    id BIGSERIAL PRIMARY KEY,
+    created_at BIGINT NOT NULL,
+    actor_sub TEXT NOT NULL,
+    actor_name TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target TEXT NOT NULL,
+    reason TEXT NOT NULL
+);
 `}
 
 // Held while the schema is upgraded, so that two instances starting together

@@ -52,7 +52,7 @@
   gap: 0.75rem;
   margin-bottom: 0.6rem;
 }
-.board-bar b {
+.board-bar > :is(b, h1) {
   font: 900 1.15rem/1 var(--display);
 }
 .board-bar span {
@@ -62,10 +62,11 @@
 
 .room-code {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: baseline;
   column-gap: 0.6rem;
   width: 100%;
+  min-width: 0;
   padding: 0.6rem 0.8rem;
   border: 0;
   border-radius: var(--r-tile);
@@ -80,8 +81,10 @@
   opacity: 0.85;
 }
 .room-code strong {
-  font: 900 1.75rem/1 var(--display);
-  letter-spacing: 0.12em;
+  margin-top: 0.25rem;
+  font: 900 1.5rem/1.2 var(--display);
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
 }
 .room-code span {
   grid-column: 1 / -1;
@@ -3001,6 +3004,16 @@ button.crew-chip:hover,
 }
 
 @media (max-width: 56rem) {
+  .settings label {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem 0.75rem;
+  }
+  .settings label input[type='range'] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+  }
   /* Sur un téléphone, la bande ne garde que le code ; les joueurs se déplient. */
   .room {
     flex-direction: row;
@@ -3010,7 +3023,7 @@ button.crew-chip:hover,
     height: auto;
   }
   .room-code {
-    flex-direction: row;
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: baseline;
     gap: 0.4rem;
     width: auto;
@@ -3025,6 +3038,10 @@ button.crew-chip:hover,
   }
   .room-toggle {
     display: block;
+  }
+  .room-leave {
+    width: auto;
+    margin-left: auto;
   }
   .room:not(.open) .room-body {
     display: none;
@@ -3042,11 +3059,6 @@ button.crew-chip:hover,
   .room-body > .chat {
     flex: none;
     height: 15rem;
-  }
-  #app:has(.play) .who,
-  #app:has(.play) #nav,
-  #app:has(.play) .lockup span {
-    display: none;
   }
   /* La barre du jeu : son nom, puis ses boutons, qui passent à la ligne s'il le faut. La
      pleine fenêtre n'apporte rien quand la bande n'est déjà qu'une barre. */
@@ -3123,7 +3135,7 @@ button.crew-chip:hover,
     grid-row: span 2;
     margin: 0;
   }
-  .board-bar b {
+  .board-bar > :is(b, h1) {
     font-size: 1rem;
   }
 
@@ -3232,9 +3244,14 @@ button.crew-chip:hover,
   place-items: center;
   container-type: size;
 }
+.pad-sheet {
+  position: relative;
+  width: min(100cqw, 100cqh * 4 / 3);
+  aspect-ratio: 4 / 3;
+}
 .pad {
   display: block;
-  width: min(100cqw, 100cqh * 4 / 3);
+  width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: var(--r);
   background: #fff;
@@ -3242,6 +3259,21 @@ button.crew-chip:hover,
 .pad.live {
   cursor: crosshair;
   touch-action: none;
+}
+.pad-cursor {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  transform: translate(-50%, -50%);
+  border: 2px solid #111730;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px white;
+  pointer-events: none;
+}
+.pad-help {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
 }
 .pad-tools {
   display: flex;

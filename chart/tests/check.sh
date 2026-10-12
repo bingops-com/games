@@ -45,6 +45,16 @@ reject "direct public service" --set service.type=LoadBalancer
 reject "external database without recovery owner" --set database.cnpg.enabled=false --set-string database.existingSecret.name=example-database
 reject "missing recovery source generation" --set database.cnpg.recovery.enabled=true
 reject "recovery archive overwrite" --set database.cnpg.recovery.enabled=true --set-string database.cnpg.recovery.serverName=games-postgresql-g1
+reject "admin without HTTPS issuer" --set admin.enabled=true
+reject "admin HTTP issuer" --set admin.enabled=true --set-string admin.issuer=http://auth.example.invalid/application/o/games-admin/
+reject "admin without dedicated identity" --set admin.enabled=true --set-string admin.issuer=https://auth.example.invalid/application/o/games-admin/ --set-string admin.username=
+reject "admin without explicit HTTPS egress" --set admin.enabled=true --set-string admin.issuer=https://auth.example.invalid/application/o/games-admin/
+reject "admin unrestricted IPv4 egress" --set admin.enabled=true --set-string admin.issuer=https://auth.example.invalid/application/o/games-admin/ --set-json 'networkPolicy.adminTo=[{"ipBlock":{"cidr":"0.0.0.0/0"}}]'
+reject "admin unrestricted IPv6 egress" --set admin.enabled=true --set-string admin.issuer=https://auth.example.invalid/application/o/games-admin/ --set-json 'networkPolicy.adminTo=[{"ipBlock":{"cidr":"::/0"}}]'
+helm template check "$chart_root" -f "$chart_root/tests/production.yaml" --set admin.enabled=true --set-string admin.issuer=https://auth.example.invalid/application/o/games-admin/ --set-json 'networkPolicy.adminTo=[{"ipBlock":{"cidr":"192.0.2.0/24"}}]' > "$check_dir/render.yaml"
+grep -E -q 'name: GAMES_ADMIN_ISSUER' "$check_dir/render.yaml"
+grep -E -q 'port: 443$' "$check_dir/render.yaml"
+grep -E -q 'cidr: 192.0.2.0/24' "$check_dir/render.yaml"
 # Ingress cannot quietly switch a development chart into an unsafe public one.
 if helm template check "$chart_root" --set ingress.enabled=true --set-string ingress.host=games.example.invalid > /dev/null 2> "$check_dir/error.log"; then
   printf 'FAIL: public ingress bypassed production validation\n' >&2
