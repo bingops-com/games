@@ -38,6 +38,18 @@ spec:
               value: ":3778"
             - name: GAMES_TRUST_PROXY
               value: {{ .Values.trustProxy | quote }}
+            {{- if .Values.admin.enabled }}
+            - name: GAMES_ADMIN_ENABLED
+              value: "true"
+            - name: GAMES_ADMIN_ISSUER
+              value: {{ .Values.admin.issuer | quote }}
+            - name: GAMES_ADMIN_CLIENT_ID
+              value: {{ .Values.admin.clientId | quote }}
+            - name: GAMES_ADMIN_USERNAME
+              value: {{ .Values.admin.username | quote }}
+            - name: GAMES_ADMIN_GROUP
+              value: {{ .Values.admin.group | quote }}
+            {{- end }}
             - name: GAMES_DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -58,6 +58,16 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "games.validate" -}}
+{{- if .Values.admin.enabled -}}
+{{- if not (regexMatch "^https://[^/?#@]+/[^?#]*/$" .Values.admin.issuer) -}}{{- fail "admin.issuer requires an HTTPS issuer URL with a trailing slash" -}}{{- end -}}
+{{- if or (empty .Values.admin.clientId) (empty .Values.admin.username) (empty .Values.admin.group) -}}{{- fail "admin requires clientId, username and dedicated group" -}}{{- end -}}
+{{- if and .Values.networkPolicy.enabled (empty .Values.networkPolicy.adminTo) -}}{{- fail "admin requires explicit networkPolicy.adminTo HTTPS peers" -}}{{- end -}}
+{{- range .Values.networkPolicy.adminTo -}}
+{{- if and (empty (dig "ipBlock" "cidr" "" .)) (empty (dig "namespaceSelector" "matchLabels" (dict) .)) -}}{{- fail "admin egress requires a CIDR or labeled namespace" -}}{{- end -}}
+{{- if eq (dig "ipBlock" "cidr" "" .) "0.0.0.0/0" -}}{{- fail "admin egress must not allow all IPv4 destinations" -}}{{- end -}}
+{{- if eq (dig "ipBlock" "cidr" "" .) "::/0" -}}{{- fail "admin egress must not allow all IPv6 destinations" -}}{{- end -}}
+{{- end -}}
+{{- end -}}
 {{- if .Values.mail -}}{{- fail "mail configuration is retired; account recovery uses offline codes" -}}{{- end -}}
 {{- if .Values.database.cnpg.recovery.enabled -}}
 {{- if or (not .Values.database.cnpg.enabled) (not .Values.database.cnpg.backup.enabled) -}}{{- fail "recovery requires CNPG and its backup ObjectStore configuration" -}}{{- end -}}

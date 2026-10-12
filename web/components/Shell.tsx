@@ -287,6 +287,11 @@ function Who() {
 }
 
 export default function Shell({ children }: { children: ReactNode }) {
+  const path = usePathname();
+  return path.startsWith('/admin/') ? children : <PlayerShell>{children}</PlayerShell>;
+}
+
+function PlayerShell({ children }: { children: ReactNode }) {
   const { toasts, full, lang } = useApp();
   const t = useT();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -301,7 +306,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!menuOpen) return;
     const escape = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || document.querySelector('dialog[open]')) return;
       setMenuOpen(false);
       menuButton.current?.focus();
     };
@@ -346,6 +351,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   }, [lang, path]);
   return (
     <>
+      <a className="skip-link" href="#view">{t('Aller au contenu', 'Skip to content')}</a>
       <div id="app" className={full ? 'full' : undefined}>
         <aside ref={sidebar} className={`side sea${path === '/t/' ? ' in-room' : ''}${menuOpen ? ' menu-open' : ''}`} onClick={(e) => {
           // Fermer aussi lors d'un lien vers la page courante ou de l'ouverture du compte.
@@ -368,7 +374,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <Who />
         </aside>
         <div className="main">
-          <main id="view">
+          <main id="view" tabIndex={-1}>
             {account?.recoveryCodesRemaining === 0 && path !== '/compte/' && <p className="notice" role="status">{t('Votre compte n’a aucun code de récupération.', 'Your account has no recovery codes.')} <Link href="/compte/">{t('Créer mes codes de secours', 'Create my recovery codes')}</Link></p>}
             {children}
           </main>

@@ -1184,7 +1184,8 @@ img.art {
 
 /* L'atelier : l'avatar en grand à gauche, les pièces à droite. */
 .dialog.look-dialog {
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
   align-items: stretch;
   gap: 1.75rem;
   max-width: 56rem;
@@ -2068,6 +2069,7 @@ img.art {
     flex-wrap: wrap;
   }
   .dialog.look-dialog {
+    grid-template-columns: minmax(0, 1fr);
     flex-direction: column;
     gap: 1rem;
   }

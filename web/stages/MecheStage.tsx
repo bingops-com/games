@@ -143,7 +143,7 @@ export default function MecheStage({ st, act }: StageProps<View>) {
               <li key={seat} className={`bomber${holds ? ' turn' : ''}${dead ? ' out' : ''}${hit ? ' hit' : ''}`} style={around(i, n)}>
                 <Avatar code={avatarAt(st, seat)} name={nameAt(st, seat)} />
                 <span className="bomber-name"><Name name={nameAt(st, seat)} fx={fxAt(st, seat)} />{seat === me && t(' (vous)', ' (you)')}</span>
-                <span className="bomber-lives" aria-label={dead ? t('éliminé', 'out') : livesOf(v.lives[seat])}>
+                <span className="bomber-lives" role="img" aria-label={dead ? t('éliminé', 'out') : livesOf(v.lives[seat])}>
                   {dead ? t('éliminé', 'out') : <span className="pips" key={v.lives[seat]}>{Array.from({ length: v.lives[seat] }, (_, k) => <i key={k}>{HEART}</i>)}</span>}
                 </span>
                 {holds && seat !== me && <span className="bomber-typing">{v.typing || '…'}</span>}

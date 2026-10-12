@@ -140,6 +140,7 @@ const scenarios = {
     check(await codesDialog.getByRole('button', { name: 'Continuer' }).isDisabled(), 'codes fermables sans confirmation');
     await p.keyboard.press('Escape');
     check(await codesDialog.isVisible(), 'Échap a perdu les codes avant sauvegarde');
+    await p.getByRole('button', { name: 'Revenir aux codes', exact: true }).click();
     check((await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, 'codes débordent sur téléphone');
     const downloading = p.waitForEvent('download');
     await codesDialog.getByRole('button', { name: 'Télécharger les codes' }).click();
@@ -180,6 +181,21 @@ const scenarios = {
     await codesDialog.getByRole('checkbox').check();
     await codesDialog.getByRole('button', { name: 'Continuer' }).click();
     check((await stale.evaluate(async (b) => (await fetch('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, { name, code: codes[1], password: 'old set password' })) === 400, 'ancien code valide après rotation');
+    // Closing is always possible, with an explicit acknowledgement of code loss.
+    await rotate.locator('input[name=password]').fill('recovered password');
+    await rotate.getByRole('button', { name: 'Créer de nouveaux codes' }).click();
+    await codesDialog.waitFor();
+    await codesDialog.getByRole('button', { name: 'Fermer la fenêtre', exact: true }).click();
+    const confirmation = p.getByRole('dialog', { name: 'Fermer sans enregistrer les codes ?' });
+    await confirmation.waitFor();
+    await p.keyboard.press('Escape');
+    await confirmation.waitFor({ state: 'detached' });
+    check(await codesDialog.isVisible(), 'annuler la fermeture a perdu les codes');
+    await codesDialog.getByRole('button', { name: 'Fermer la fenêtre', exact: true }).click();
+    await confirmation.getByRole('button', { name: 'Fermer sans les enregistrer', exact: true }).click();
+    await codesDialog.waitFor({ state: 'detached' });
+    check(await p.locator('dialog[open]').count() === 0, 'fenêtre restante après fermeture confirmée');
+    check(await p.evaluate(() => document.body.style.overflow !== 'hidden'), 'défilement bloqué après fermeture des fenêtres imbriquées');
   },
 
   // Quitter un salon par mégarde, puis y retourner depuis la bande.

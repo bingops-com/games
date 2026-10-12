@@ -94,10 +94,10 @@ export default function Shop() {
             {fxOwned.length === 0 ? (
               <p className="hint">{t('Vous n’en avez pas encore. Ils passent au magasin de temps en temps.', 'You have none yet. They come up in the shop now and then.')}</p>
             ) : (
-              <ul className="fx-list" role="radiogroup" aria-label={t('Effet du pseudo', 'Name effect')}>
+              <ul className="fx-list" aria-label={t('Effet du pseudo', 'Name effect')}>
                 {['', ...fxOwned].map((fx) => (
                   <li key={fx || 'none'}>
-                    <button role="radio" aria-checked={account.fx === fx} className={account.fx === fx ? 'on' : undefined} onClick={() => wear(fx)}>
+                    <button aria-pressed={account.fx === fx} className={account.fx === fx ? 'on' : undefined} onClick={() => wear(fx)}>
                       <b><Name name={name} fx={fx} /></b>
                       <small>{fx ? fxName(fx, t) : t('Sans effet', 'No effect')}</small>
                     </button>

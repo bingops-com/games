@@ -1,6 +1,6 @@
 'use client';
 
-import { Ic } from './ui';
+import { Dialog, Ic } from './ui';
 import { useEffect, useState } from 'react';
 import { App, useApp, useT } from '@/lib/app';
 import { Avatar, PARTS, PartIcon, SLOTS, encode, fromShop, lockOf, parse, partName, randomLook, slotName, type Look, type Slot } from '@/lib/avatar';
@@ -26,9 +26,6 @@ export default function AvatarEditor() {
     if (!open) return;
     setLook(parse(avatar) ?? randomLook());
     setLocked(null);
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && App.openModal(null);
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
     // L'avatar n'est relu qu'à l'ouverture : il ne doit pas écraser ce qui se compose.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -58,10 +55,8 @@ export default function AvatarEditor() {
   };
 
   return (
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && App.openModal(null)}>
-      <div className="dialog look-dialog" role="dialog" aria-modal="true" aria-labelledby="look-title">
+    <Dialog title={t('Votre avatar', 'Your avatar')} className="look-dialog" onClose={() => App.openModal(null)}>
         <div className="look-side">
-          <h2 id="look-title">{t('Votre avatar', 'Your avatar')}</h2>
           <div className="look-stage sea"><Avatar code={encode(look)} /></div>
           <b className="look-name">{name}</b>
           <button className="btn quiet" onClick={() => { setLocked(null); setLook(randomLook()); }}><Ic name="dice" />{t('Au hasard', 'Random')}</button>
@@ -112,7 +107,6 @@ export default function AvatarEditor() {
             <button className="btn quiet" onClick={() => App.openModal(null)}>{t('Annuler', 'Cancel')}</button>
           </div>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

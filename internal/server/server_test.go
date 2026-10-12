@@ -48,9 +48,9 @@ func (c *client) do(method, path, body string, headers ...string) (int, map[stri
 }
 
 // want fails the test unless the call answers with the given status.
-func (c *client) want(status int, method, path, body string) map[string]any {
+func (c *client) want(status int, method, path, body string, headers ...string) map[string]any {
 	c.t.Helper()
-	code, out := c.do(method, path, body)
+	code, out := c.do(method, path, body, headers...)
 	if code != status {
 		c.t.Fatalf("%s %s %s = %d %v, want %d", method, path, body, code, out, status)
 	}

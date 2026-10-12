@@ -214,7 +214,7 @@ func TestRecoveryMigrationPreservesLegacyAccounts(t *testing.T) {
 	if _, err := db.ExecContext(ctx, "UPDATE users SET email = 'legacy@example.invalid', email_checked = TRUE WHERE id = $1", u.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "DROP TABLE recovery_codes; DELETE FROM schema_version WHERE version = 7"); err != nil {
+	if _, err := db.ExecContext(ctx, "DROP TABLE admin_audit; ALTER TABLE reports DROP COLUMN status, DROP COLUMN resolved_at; DROP TABLE recovery_codes; DELETE FROM schema_version WHERE version >= 7"); err != nil {
 		t.Fatal(err)
 	}
 	st.Close()

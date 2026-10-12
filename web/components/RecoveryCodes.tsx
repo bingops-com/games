@@ -9,7 +9,8 @@ export function RecoveryCodesDialog() {
   const { recoveryCodes, account } = useApp();
   const t = useT();
   const [saved, setSaved] = useState(false);
-  useEffect(() => setSaved(false), [recoveryCodes]);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => { setSaved(false); setClosing(false); }, [recoveryCodes]);
   if (!recoveryCodes || !account) return null;
   const download = () => {
     const text = `${t('Codes de récupération Games', 'Games recovery codes')} — ${account.name}\n\n${recoveryCodes.join('\n')}\n\n${t('Chaque code fonctionne une seule fois. Gardez ce fichier privé.', 'Each code works once. Keep this file private.')}\n`;
@@ -21,12 +22,12 @@ export function RecoveryCodesDialog() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const done = () => {
-    if (!saved) return;
+    if (!saved) { setClosing(true); return; }
     App.dismissRecoveryCodes();
     setSaved(false);
   };
   return (
-    <Dialog title={t('Gardez vos codes de récupération', 'Save your recovery codes')} onClose={done} className="recovery-dialog">
+    <><Dialog title={t('Gardez vos codes de récupération', 'Save your recovery codes')} onClose={done} className="recovery-dialog">
       <p>{t('Ils permettent de retrouver votre compte si vous oubliez votre mot de passe. Chaque code fonctionne une seule fois.', 'They let you recover your account if you forget your password. Each code works once.')}</p>
       <p className="notice">{t('Ils ne seront plus affichés après fermeture. Enregistrez-les dans votre gestionnaire de mots de passe ou téléchargez-les.', 'They will not be shown again after closing. Save them in your password manager or download them.')}</p>
       <ul className="recovery-codes" aria-label={t('Codes de récupération', 'Recovery codes')}>
@@ -37,6 +38,11 @@ export function RecoveryCodesDialog() {
       <label className="recovery-saved"><input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />{t('J’ai enregistré mes codes en lieu sûr.', 'I saved my codes somewhere safe.')}</label>
       <button type="button" className="btn primary" disabled={!saved} onClick={done}>{t('Continuer', 'Continue')}</button>
     </Dialog>
+    {closing && <Dialog title={t('Fermer sans enregistrer les codes ?', 'Close without saving the codes?')} onClose={() => setClosing(false)}>
+      <p>{t('Ces codes ne seront plus affichés. Sans eux et sans votre mot de passe, vous ne pourrez pas récupérer votre compte. Vous pourrez en créer de nouveaux depuis « Mon compte » avec votre mot de passe.', 'These codes will not be shown again. Without them and your password, you cannot recover your account. You can generate new codes from “My account” using your password.')}</p>
+      <button type="button" className="btn primary" autoFocus onClick={() => setClosing(false)}>{t('Revenir aux codes', 'Back to the codes')}</button>
+      <button type="button" className="btn quiet" onClick={() => { App.dismissRecoveryCodes(); setClosing(false); }}>{t('Fermer sans les enregistrer', 'Close without saving')}</button>
+    </Dialog>}</>
   );
 }
 

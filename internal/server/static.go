@@ -93,12 +93,14 @@ func (s *static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("ETag", a.etag)
 	h.Add("Vary", "Accept-Encoding")
 	// Next.js names these files after their content: they never change.
-	if strings.HasPrefix(r.URL.Path, "/_next/static/") {
+	if h.Get("Cache-Control") == "no-store" {
+		// The administrator gate controls the caching of its pages.
+	} else if strings.HasPrefix(r.URL.Path, "/_next/static/") {
 		h.Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
 		h.Set("Cache-Control", "no-cache")
 	}
-	if status == http.StatusOK && r.Header.Get("If-None-Match") == a.etag {
+	if status == http.StatusOK && h.Get("Cache-Control") != "no-store" && r.Header.Get("If-None-Match") == a.etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}

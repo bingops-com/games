@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ type Config struct {
 	TrustProxy bool
 	Log        *slog.Logger
 	PublicURL  string
+	Admin      AdminConfig
 }
 
 type Server struct {
@@ -59,6 +61,7 @@ type Server struct {
 	sockets        liveSockets
 	presence       *presence
 	handler        http.Handler
+	admin          *adminAuth
 }
 
 // New builds the server. web holds the built interface.
@@ -87,6 +90,9 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 		ipMessageLimit: newLimiter(300, 600),
 		hub:            room.NewHub(cfg.Log),
 		presence:       newPresence(),
+	}
+	if cfg.Admin.Enabled {
+		s.admin = newAdminAuth(cfg)
 	}
 	s.hub.Record = func(userID, game string, won bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -150,6 +156,7 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 	api.HandleFunc("GET /api/tables/{code}", s.handle(s.table))
 	api.HandleFunc("POST /api/tables/{code}/invite", s.handle(s.inviteToRoom))
 	api.HandleFunc("GET /api/ws", s.socket)
+	s.adminRoutes(api)
 	api.HandleFunc("/api/", s.handle(func(http.ResponseWriter, *http.Request) (any, error) {
 		return nil, httpError{http.StatusNotFound, "Route inconnue"}
 	}))
@@ -185,7 +192,18 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 		}
 		files.ServeHTTP(w, r)
 	})
-	mux.Handle("/", files)
+	adminFiles := s.adminPage(files)
+	// The static resolver cleans decoded paths. Gate that same path, including
+	// encoded slashes/dots that ServeMux treats as a different segment.
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := path.Clean("/" + r.URL.Path)
+		if p == "/admin" || strings.HasPrefix(p, "/admin/") {
+			adminFiles.ServeHTTP(w, r)
+			return
+		}
+		files.ServeHTTP(w, r)
+	}))
+	mux.Handle("/admin/", adminFiles)
 	s.handler = s.middleware(mux)
 	return s, nil
 }
@@ -202,6 +220,13 @@ func (s *Server) Housekeeping(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
+			if s.admin != nil {
+				s.admin.limit.sweep()
+				s.admin.global.sweep()
+				s.admin.mu.Lock()
+				s.admin.prune()
+				s.admin.mu.Unlock()
+			}
 			if err := s.store.PurgeSessions(ctx); err != nil && ctx.Err() == nil {
 				s.log.Error("purge sessions", "err", err)
 			}

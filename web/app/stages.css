@@ -52,7 +52,7 @@
   gap: 0.75rem;
   margin-bottom: 0.6rem;
 }
-.board-bar b {
+.board-bar > :is(b, h1) {
   font: 900 1.15rem/1 var(--display);
 }
 .board-bar span {
@@ -3004,6 +3004,16 @@ button.crew-chip:hover,
 }
 
 @media (max-width: 56rem) {
+  .settings label {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.35rem 0.75rem;
+  }
+  .settings label input[type='range'] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+  }
   /* Sur un téléphone, la bande ne garde que le code ; les joueurs se déplient. */
   .room {
     flex-direction: row;
@@ -3028,6 +3038,10 @@ button.crew-chip:hover,
   }
   .room-toggle {
     display: block;
+  }
+  .room-leave {
+    width: auto;
+    margin-left: auto;
   }
   .room:not(.open) .room-body {
     display: none;
@@ -3121,7 +3135,7 @@ button.crew-chip:hover,
     grid-row: span 2;
     margin: 0;
   }
-  .board-bar b {
+  .board-bar > :is(b, h1) {
     font-size: 1rem;
   }
 
@@ -3230,9 +3244,14 @@ button.crew-chip:hover,
   place-items: center;
   container-type: size;
 }
+.pad-sheet {
+  position: relative;
+  width: min(100cqw, 100cqh * 4 / 3);
+  aspect-ratio: 4 / 3;
+}
 .pad {
   display: block;
-  width: min(100cqw, 100cqh * 4 / 3);
+  width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: var(--r);
   background: #fff;
@@ -3240,6 +3259,21 @@ button.crew-chip:hover,
 .pad.live {
   cursor: crosshair;
   touch-action: none;
+}
+.pad-cursor {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  transform: translate(-50%, -50%);
+  border: 2px solid #111730;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px white;
+  pointer-events: none;
+}
+.pad-help {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
 }
 .pad-tools {
   display: flex;

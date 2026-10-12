@@ -114,9 +114,9 @@ export default function Profile() {
   }, [ready, name, viewer, version, lang, avatar]);
 
   const home = <Link href="/">{t('Revenir aux jeux', 'Back to the games')}</Link>;
-  if (!name) return <p className="notice">{t('Cette adresse ne désigne aucun joueur.', 'This address names no player.')} {home}</p>;
-  if (!found || found.for !== name) return null;
-  if (!found.p) return <p className="notice">{found.error}. {home}</p>;
+  if (!name) return <div><h1>{t('Profil', 'Profile')}</h1><p className="notice">{t('Cette adresse ne désigne aucun joueur.', 'This address names no player.')} {home}</p></div>;
+  if (!found || found.for !== name) return <div><h1>{t('Profil', 'Profile')}</h1><p role="status">{t('Chargement du profil…', 'Loading profile…')}</p></div>;
+  if (!found.p) return <div><h1>{t('Profil introuvable', 'Profile not found')}</h1><p className="notice" role="alert">{found.error}. {home}</p></div>;
 
   const p = found.p;
   const by = new Map(p.stats.map((s) => [s.game, s]));

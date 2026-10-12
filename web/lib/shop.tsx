@@ -33,8 +33,8 @@ export function Name({ name, fx }: { name: string; fx?: string }) {
   if (!fx || !FX[fx]) return <>{name}</>;
   if (fx !== 'vague') return <span className={`fx fx-${fx}`}>{name}</span>;
   return (
-    <span className="fx fx-vague" aria-label={name}>
+    <><span className="sr">{name}</span><span className="fx fx-vague" aria-hidden="true">
       {[...name].map((c, i) => <span key={i} aria-hidden="true" style={{ '--i': i } as CSSProperties}>{c}</span>)}
-    </span>
+    </span></>
   );
 }
