@@ -43,8 +43,7 @@ art:
 
 # Render the Helm chart offline; nothing is sent to a cluster.
 chart:
-	helm lint chart
-	helm template games chart > /dev/null
+	bash chart/tests/check.sh
 
 docker:
 	docker build -t games .

@@ -1,0 +1,17 @@
+# Synthetic fixture for offline chart tests only. Never deploy these values.
+production: true
+image:
+  tag: sha-0000000000000000000000000000000000000000
+publicUrl: https://games.example.invalid
+mail:
+  relay: relay.mail.svc:587
+  serverName: smtp.games.example.invalid
+  username: games@games.example.invalid
+  existingSecret: example-smtp-credentials
+database:
+  cnpg:
+    backup:
+      enabled: true
+      destinationPath: s3://example-invalid/games
+      endpointURL: https://backup.example.invalid
+      credentialsSecret: example-backup-credentials

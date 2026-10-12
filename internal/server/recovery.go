@@ -28,34 +28,27 @@ func validEmail(email string) bool {
 
 // confirmed returns the signed-in account once it has given its password
 // again: changing how an account is recovered takes more than a session.
-func (s *Server) confirmed(r *http.Request, password string) (*store.User, error) {
+func (s *Server) confirmed(r *http.Request, password string) (*store.User, string, error) {
 	u, err := s.signedIn(r)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := s.throttleAuth(r); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	_, hash, err := s.store.Credentials(r.Context(), u.Name)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if len(password) > 128 || !checkPassword(hash, password) {
-		return nil, httpError{http.StatusForbidden, "Mot de passe incorrect"}
+		return nil, "", httpError{http.StatusForbidden, "Mot de passe incorrect"}
 	}
-	return u, nil
+	return u, hash, nil
 }
 
 // baseURL is where the links sent by mail lead.
-func (s *Server) baseURL(r *http.Request) string {
-	if s.cfg.PublicURL != "" {
-		return strings.TrimRight(s.cfg.PublicURL, "/")
-	}
-	scheme := "http"
-	if s.secure(r) {
-		scheme = "https"
-	}
-	return scheme + "://" + r.Host
+func (s *Server) baseURL(_ *http.Request) string {
+	return strings.TrimRight(s.cfg.PublicURL, "/")
 }
 
 func newToken() string {
@@ -68,7 +61,7 @@ func newToken() string {
 // after the answer, like every message.
 func (s *Server) sendCheck(r *http.Request, u *store.User) {
 	base, id, name, email := s.baseURL(r), u.ID, u.Name, u.Email
-	if email == "" {
+	if email == "" || s.cfg.Mail == nil {
 		return
 	}
 	go func() {
@@ -104,6 +97,9 @@ func (s *Server) resendCheck(w http.ResponseWriter, r *http.Request) (any, error
 	}
 	if u.Email == "" || u.EmailChecked {
 		return nil, bad("Il n'y a pas d'adresse à confirmer")
+	}
+	if s.cfg.Mail == nil {
+		return nil, httpError{http.StatusServiceUnavailable, "L'envoi d'e-mail n'est pas configuré"}
 	}
 	s.sendCheck(r, u)
 	return struct{}{}, nil
@@ -141,7 +137,7 @@ func (s *Server) setEmail(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := readJSON(r, &body); err != nil {
 		return nil, err
 	}
-	u, err := s.confirmed(r, body.Password)
+	u, verifiedHash, err := s.confirmed(r, body.Password)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +145,10 @@ func (s *Server) setEmail(w http.ResponseWriter, r *http.Request) (any, error) {
 	if !validEmail(email) {
 		return nil, bad("Cette adresse e-mail n'est pas valable")
 	}
-	err = s.store.SetEmail(r.Context(), u.ID, email)
+	err = s.store.SetEmail(r.Context(), u.ID, email, verifiedHash)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, errAuth
+	}
 	if errors.Is(err, store.ErrEmailUsed) {
 		return nil, httpError{http.StatusConflict, "Cette adresse est déjà utilisée par un autre compte"}
 	}
@@ -176,7 +175,7 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request) (any, error
 	if err := readJSON(r, &body); err != nil {
 		return nil, err
 	}
-	u, err := s.confirmed(r, body.Old)
+	u, verifiedHash, err := s.confirmed(r, body.Old)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +186,13 @@ func (s *Server) setPassword(w http.ResponseWriter, r *http.Request) (any, error
 	if c, err := r.Cookie(cookieName); err == nil {
 		keep = tokenHash(c.Value)
 	}
-	if err := s.store.SetPassword(r.Context(), u.ID, hashPassword(body.New), keep); err != nil {
+	if err := s.store.SetPassword(r.Context(), u.ID, hashPassword(body.New), keep, verifiedHash); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, errAuth
+		}
 		return nil, err
 	}
+	s.sockets.revoke("", u.ID, keep)
 	return struct{}{}, nil
 }
 
@@ -209,6 +212,9 @@ func (s *Server) forgot(w http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	who := strings.TrimSpace(body.Name)
 	base := s.baseURL(r)
+	if s.cfg.Mail == nil {
+		return struct{}{}, nil
+	}
 	// The message leaves after the answer: how long it takes must not tell
 	// whether there was one to send.
 	go func() {
@@ -227,8 +233,13 @@ func (s *Server) forgot(w http.ResponseWriter, r *http.Request) (any, error) {
 		if err != nil || u.Email == "" || !u.EmailChecked {
 			return
 		}
+		// Resolve aliases first: the pseudo and email, from any address, share
+		// one cooldown. Keep the HTTP answer neutral even when no mail leaves.
+		if !s.recoveryLimit.allow(u.ID) {
+			return
+		}
 		token := newToken()
-		if err := s.store.CreateReset(ctx, u.ID, tokenHash(token), time.Now().Add(resetLife)); err != nil {
+		if err := s.store.CreateReset(ctx, u.ID, u.Email, tokenHash(token), time.Now().Add(resetLife)); err != nil {
 			s.log.Error("create reset", "err", err)
 			return
 		}
@@ -263,18 +274,24 @@ func (s *Server) reset(w http.ResponseWriter, r *http.Request) (any, error) {
 		return nil, bad("Mot de passe : 8 caractères minimum")
 	}
 	ctx := r.Context()
-	id, err := s.store.ResetUser(ctx, tokenHash(body.Token))
+	_, err := s.store.ResetUser(ctx, tokenHash(body.Token))
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, httpError{http.StatusGone, "Ce lien ne marche plus : demandez-en un nouveau"}
 	}
 	if err != nil {
 		return nil, err
 	}
-	// Every session closes, and the link with them.
-	if err := s.store.SetPassword(ctx, id, hashPassword(body.Password), ""); err != nil {
+	// Hash outside the transaction; consume the token and revoke atomically.
+	passwordHash := hashPassword(body.Password)
+	id, err := s.store.ResetPassword(ctx, tokenHash(body.Token), passwordHash)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil, httpError{http.StatusGone, "Ce lien ne marche plus : demandez-en un nouveau"}
+	}
+	if err != nil {
 		return nil, err
 	}
-	if err := s.openSession(w, r, id); err != nil {
+	s.sockets.revoke("", id, "")
+	if err := s.openSession(w, r, id, passwordHash); err != nil {
 		return nil, err
 	}
 	u, err := s.store.User(ctx, id)

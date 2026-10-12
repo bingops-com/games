@@ -60,7 +60,7 @@ mots. Les 358 mots de Codenoms, que Skribouille donne aussi à dessiner, sont da
 - **Accueil** : un nom, puis « Créer un salon » ou « Rejoindre avec un code ».
   Cliquer sur un jeu le choisit comme premier jeu du salon ; c'est le bouton
   qui crée le salon.
-- Un salon a un code de 4 lettres (sans I ni O) et un lien d'invitation. Celui
+- Un salon a un code de 8 lettres (sans I ni O) et un lien d'invitation. Celui
   qui le crée en est l'hôte : il choisit le jeu, lance la partie, peut
   l'arrêter, la relancer ou changer de jeu. Les autres voient son choix en
   direct.
@@ -135,43 +135,154 @@ encore, le serveur réessaie dix fois avant d'abandonner.
 Le chart Helm est dans `chart/`. Il déploie le serveur et, par défaut, sa base :
 un cluster CloudNativePG dont le secret généré (`games-postgresql-app`, clé
 `uri`) fournit `GAMES_DATABASE_URL`. Aucun mot de passe n'est écrit dans les
-valeurs.
+valeurs. **Cette révision est validée hors ligne, pas déployée.**
+La configuration LabOps est préparée dans `apps/workloads/games` du dépôt
+`bingops-com/labops` ; son runbook possède les prérequis et la mise en service.
 
-```sh
-helm upgrade --install games chart --namespace games --create-namespace \
-  --set image.tag=<tag> --set ingress.enabled=true --set ingress.host=<hôte>
-```
+Le responsable de la mise en service est l'opérateur LabOps. Les prérequis sont
+CloudNativePG et son plugin Barman Cloud, un stockage persistant, un CNI qui
+applique les NetworkPolicy, le proxy HTTPS et un relais SMTP fonctionnel. Avec
+l'Ingress fourni : Traefik et cert-manager, émetteur `letsencrypt-cloudflare`
+(modifiable dans `ingress.annotations`). Le relais doit proposer STARTTLS avec
+un certificat d'une autorité reconnue par l'image, valide pour le nom de
+`mail.relay` ou de `mail.serverName` si le relais est un Service interne ;
+vérifier aussi la délivrabilité et SPF/DKIM/DMARC avant ouverture.
 
-Ce qu'il suppose du cluster : l'opérateur CloudNativePG, Traefik et cert-manager
-avec l'émetteur `letsencrypt-cloudflare` (les annotations se changent dans
-`ingress.annotations`). Valeurs utiles :
+Le chart passe automatiquement en production avec `ingress.enabled=true`.
+Pour un tunnel qui atteint directement le Service, mettre explicitement
+`production=true`. Il refuse les configurations de production sans URL HTTPS,
+SMTP, image épinglée, isolation réseau et sauvegarde continue. Valeurs à
+déclarer dans la source GitOps LabOps, sans identifiants en clair :
 
 | Valeur | Rôle |
 | --- | --- |
-| `image.repository`, `image.tag` | L'image ; `ghcr.io/bingops-com/games` et la version du chart par défaut |
-| `ingress.enabled`, `ingress.host` | L'adresse publique |
+| `image.repository`, `image.digest` ou `image.tag` | Image GHCR épinglée par `sha256:…` ou `sha-<commit de 40 caractères>` |
+| `production`, `publicUrl`, `ingress.*` | Origine HTTPS publique ; doit correspondre à l'Ingress s'il est activé |
+| `mail.relay`, `mail.existingSecret` | Relais STARTTLS ; éventuel Secret existant avec clés `username` et `password` (ou `mail.username` public et clé `password`) |
+| `mail.serverName` | Nom DNS du certificat TLS lorsque `mail.relay` utilise un nom de Service interne ; vide : vérifie le nom du relais |
+| `networkPolicy.ingressFrom` | Namespace **et** labels des pods des seuls proxies autorisés ; adapter pour Cloudflare Tunnel |
+| `networkPolicy.dnsTo`, `databaseTo`, `smtpTo`, `smtpPort` | Sorties limitées au DNS, à PostgreSQL et au relais ; vérifier les vrais labels du cluster |
 | `database.cnpg.storage` | Taille et classe du volume de la base (2 Gi) |
-| `database.cnpg.backup.*` | Archivage continu et sauvegarde quotidienne vers un stockage S3 (plugin Barman Cloud), désactivé par défaut |
-| `database.cnpg.enabled=false` + `database.existingSecret` | Utiliser une base existante |
+| `database.cnpg.backup.*` | Activer sauvegarde quotidienne, archivage WAL, destination S3, Secret des clés, rétention et génération d'archive |
+| `database.cnpg.recovery.*` | Restauration déclarative d'un **nouveau** cluster depuis une génération d'archive précédente |
+| `database.cnpg.enabled=false`, `database.existingSecret.*`, `networkPolicy.databaseTo` | Base externe : référence du Secret, runbook de sauvegarde propriétaire et accès réseau explicite obligatoires |
 
-À savoir :
+La NetworkPolicy ne sélectionne que le serveur Games, pas les pods CNPG ; le
+runbook CloudNativePG de LabOps possède la sécurité et l'accès S3 de la base.
+Les valeurs par défaut restent privées, sans e-mail ni sauvegarde : elles ne
+constituent pas une configuration publique. Le Service reste `ClusterIP`.
 
-- **Le chart n'a été que rendu hors ligne** (`make chart`), jamais installé. Il
-  n'est pas référencé dans `labops` (ni application Argo CD, ni DNS).
-- **Aucune image n'est publiée** : la CI construit et teste, elle ne pousse pas
-  vers `ghcr.io`.
-- **La base n'est pas sauvegardée par défaut.** Comptes et amis sont
-  irremplaçables : renseignez `database.cnpg.backup` avant d'ouvrir au public.
-- Le cluster PostgreSQL est conservé quand la release est désinstallée.
-- **Un seul réplica** : les salons en cours sont dans la mémoire du pod.
+**Un seul réplica, stratégie `Recreate`.** Les salons actifs ne sont pas
+partagés : une mise à jour interrompt les parties en cours, puis retrouve les
+salons en attente. Lors du premier passage aux codes de huit lettres, les
+anciens salons à quatre lettres ne sont pas restaurés : recréer un salon et
+renvoyer son invitation. Comptes, amis et statistiques sont conservés. Le
+cluster PostgreSQL est conservé lors d'une désinstallation du chart.
 
-Ce que le serveur fait déjà : mots de passe en Argon2id, session dans un cookie
-`HttpOnly` et `SameSite=Lax` (30 jours, seul son condensé est stocké), refus des
-requêtes d'une autre origine, limite de tentatives de connexion par adresse et
-d'invitations par compte, corps de requête limité à 20 Ko, en-têtes de sécurité
+La CI utilise le Go corrigé épinglé dans `go.mod`, audite le verrou npm et
+teste le chart. Après un futur push autorisé sur `master`, elle construit
+l'image, bloque sa publication si Trivy trouve une vulnérabilité HIGH ou
+CRITICAL, puis publie `ghcr.io/bingops-com/games:sha-<commit>`. Une PR ne publie
+rien. Un lancement manuel de la CI sur une branche permet de publier une
+image candidate scannée, épinglée au SHA de cette branche. La visibilité GHCR ou un `imagePullSecrets` en lecture seule reste à
+configurer par l'opérateur ; aucune image n'est publiée par les tests locaux.
+
+Vérifications reproductibles, sans appliquer de ressources :
+
+```sh
+bash chart/tests/check.sh
+helm template games chart --namespace games --values /path/to/production-values.yaml >/dev/null
+```
+
+`chart/tests/production.yaml` contient uniquement des valeurs fictives de test,
+jamais une configuration à déployer. Le feu vert opérationnel exige en plus
+un certificat HTTPS valide, une confirmation/récupération par e-mail réelle,
+un archivage WAL et une sauvegarde réussis, une restauration contrôlée et un
+test effectif de l'isolation réseau. Ces contrôles en cluster ne sont pas
+remplacés par `helm template` et ne sont pas exécutés implicitement.
+
+`/livez` contrôle le processus ; `/healthz` contrôle aussi PostgreSQL. Une panne
+de base retire le pod du service sans le redémarrer en boucle.
+
+Les salons sauvegardés occupés restent restaurables même après une longue
+attente sans changement. Les salons sauvegardés vides expirent après dix
+minutes. Une connexion lente libère sa présence et la main de son hôte.
+
+Les demandes de récupération sont limitées à un e-mail par compte toutes
+les cinq minutes, même en alternant pseudo, adresse e-mail et IP. Une nouvelle
+demande conserve les liens précédents jusqu’à leur expiration ; une récupération
+réussie les invalide tous avec les sessions existantes.
+Les modifications du mot de passe et de l'adresse de récupération revérifient
+atomiquement le condensé validé : une requête ancienne ne peut pas annuler une
+réinitialisation concurrente.
+
+### Entrées sensibles et reprise
+
+Les URL, sélecteurs réseau, versions, destination S3 et noms de génération
+sont de la configuration déclarative. Les sessions, comptes, salons et
+statistiques sont de l'état PostgreSQL ; ne jamais les exporter dans Git.
+Pour pouvoir reconstruire sans l'historique d'une conversation :
+
+- **Base CNPG** : le Secret applicatif est généré par l'opérateur et régénéré
+  après restauration avec `database` et `owner`. Ne pas copier sa valeur ;
+  le chart référence le Secret du cluster restauré.
+- **Sauvegardes S3** : clés dans Bitwarden, dossier `labprod`, propriété LabOps ;
+  créer/faire tourner une identité limitée au bucket/préfixe Games (lecture,
+  écriture, liste et suppression pour la rétention). Son Secret Kubernetes
+  synchronisé par BitwardenSecret a les clés `ACCESS_KEY_ID` et `ACCESS_SECRET_KEY`, et est référencé par
+  `backup.credentialsSecret`. Procédure propriétaire : runbook CloudNativePG
+  de LabOps, `docs/infrastructure/cloudnative-pg.md`. Vérifier les statuts
+  `ContinuousArchiving`, `Backup` et `ScheduledBackup`, sans afficher le Secret.
+- **SMTP** : le relais transactionnel STARTTLS et ses DNS relèvent de LabOps ; runbook
+  `apps/workloads/games/README.md`. Si authentification requise, conserver
+  les identifiants d'envoi uniquement dans Bitwarden `labprod`, les synchroniser et
+  référencer `mail.existingSecret`. Faire tourner le compte du relais puis
+  mettre à jour le secret Bitwarden ; vérifier par un compte de test, jamais par
+  un journal de liens.
+- **CI et registre** : `GITHUB_TOKEN` est éphémère et fourni par GitHub. Si
+  l'image reste privée, conserver le jeton de lecture GHCR dans Bitwarden et
+  un `imagePullSecrets` scellé ; recréer/faire tourner le jeton depuis le compte
+  propriétaire du paquet, puis vérifier un téléchargement sans afficher le jeton.
+- **Base externe** : son propriétaire doit documenter identifiants, rotation,
+  sauvegarde, restauration et vérification dans `backupRunbook` avant service.
+
+### Restaurer sans écraser les archives
+
+Restaurer vers un **nouveau nom de cluster/release**, jamais en modifiant le
+bootstrap d'un cluster existant. Reprendre destination, endpoint et Secret
+S3 depuis Git et Bitwarden ; choisir `recovery.serverName` parmi les anciennes
+générations archivées et un `backup.serverName` nouveau et différent. Le chart
+refuse de réutiliser l'archive source. `recovery.objectStore` vide réutilise
+l'ObjectStore défini par cette release ; `recovery.targetTime` permet une
+restauration à un instant précis. Exemple de **rendu uniquement** :
+
+```sh
+helm template games-restore chart --namespace games --values /path/to/production-values.yaml --set fullnameOverride=games-restore --set ingress.enabled=false --set production=true --set database.cnpg.recovery.enabled=true --set database.cnpg.recovery.serverName=games-postgresql-g1 --set database.cnpg.backup.serverName=games-postgresql-restore-g1 >/dev/null
+```
+
+Avant un exercice réel, vérifier la sauvegarde source et la disponibilité des
+WAL, réserver un nom et une génération uniques, et faire autoriser sa création.
+Sur la copie isolée, vérifier `/healthz` et les parcours d'un compte synthétique,
+puis la reprise d'archivage vers la nouvelle génération. Ne pas exposer la copie
+aux joueurs ni supprimer l'ancienne base/les archives pendant ce contrôle.
+Après une interruption, réutiliser la même déclaration pour reprendre le même
+cluster ; ne créer une autre génération qu'en créant réellement un autre
+cluster. La bascule DNS/proxy et tout nettoyage restent des opérations
+distinctes à autoriser. Référence du bootstrap :
+[récupération CloudNativePG](https://cloudnative-pg.io/docs/1.26/recovery/) et
+[plugin Barman Cloud](https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/).
+
+Protections du serveur : mots de passe en Argon2id, session dans un cookie
+`HttpOnly` et `SameSite=Lax` (30 jours, seul son condensé est stocké), toujours
+`Secure` en production même si le proxy oublie son en-tête, refus des
+requêtes d'une autre origine, limitation globale et par adresse des tentatives
+d'authentification, invitations limitées par compte, corps limité à 20 Ko, en-têtes
 (CSP sans ressource externe), arrêt propre, journal JSON d'une ligne par appel
-d'API sans jamais le corps. Sonde : `GET /healthz` répond `ok` tant que la base
-répond.
+d'API sans jamais le corps. Sondes : `GET /livez` vérifie le processus sans accéder à la base ;
+`GET /healthz` vérifie PostgreSQL et sert à la readiness. Une panne de base
+ne provoque donc pas de redémarrage des parties en mémoire. WebSockets : 256 connexions au total, 24 par adresse, 3 par identité,
+48 par salon ; débit par connexion, identité et adresse, admission et recherche
+de salons limitées. Ces limites par adresse sont partagées derrière un même NAT.
 
 ## Avatars et objectifs
 
@@ -221,13 +332,15 @@ compte existe, ait une adresse confirmée ou non. Un compte sans adresse
 confirmée ne se récupère pas.
 
 L'envoi passe par un relais SMTP (`GAMES_SMTP_ADDR`, `hôte:port` ; au besoin
-`GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`) ; `GAMES_MAIL_FROM` et
+`GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`). `GAMES_SMTP_SERVER_NAME` permet
+de vérifier le nom public du certificat en joignant un Service interne,
+sans désactiver la validation TLS. `GAMES_MAIL_FROM` et
 `GAMES_MAIL_ENVELOPE` donnent l'expéditeur lu et celui de l'enveloppe, et
 `GAMES_PUBLIC_URL` l'adresse du site écrite dans les liens. Sans relais, les
 liens sont seulement écrits dans le journal du serveur : c'est ce qui se passe
 en développement. Le relais du lab, sa signature DKIM et ses enregistrements
-SPF et DMARC sont dans le dépôt labops (`apps/platform/mail`,
-`terraform/cloudflare/mail.tf`).
+SPF et DMARC sont dans le dépôt labops (`apps/platform/mail/labprod`,
+`terraform/cloudflare/games-mail.tf`).
 
 ## Dans un salon
 

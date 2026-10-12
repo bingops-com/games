@@ -1,5 +1,4 @@
-// games serves accounts, profiles, friends and the embedded interface. The
-// games themselves, and the tables players share, are not written yet.
+// games serves accounts, live game rooms and the embedded interface.
 package main
 
 import (
@@ -38,6 +37,21 @@ func serve(log *slog.Logger) error {
 	if url == "" {
 		return errors.New("GAMES_DATABASE_URL is not set (postgres://user:password@host:5432/games)")
 	}
+	production := os.Getenv("GAMES_PRODUCTION") == "true"
+	var sender mail.Sender
+	if addr := os.Getenv("GAMES_SMTP_ADDR"); addr != "" {
+		sender = mail.SMTP{
+			Addr: addr, User: os.Getenv("GAMES_SMTP_USER"), Password: os.Getenv("GAMES_SMTP_PASSWORD"),
+			ServerName: os.Getenv("GAMES_SMTP_SERVER_NAME"),
+			From:       env("GAMES_MAIL_FROM", "noreply@games.lab.bingo"),
+			Envelope:   env("GAMES_MAIL_ENVELOPE", "bounces@smtp.games.lab.bingo"),
+			RequireTLS: production || os.Getenv("GAMES_SMTP_REQUIRE_TLS") != "false",
+		}
+	}
+	cfg := server.Config{Production: production, TrustProxy: os.Getenv("GAMES_TRUST_PROXY") == "true", Log: log, Mail: sender, PublicURL: os.Getenv("GAMES_PUBLIC_URL")}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// The database may still be starting when the server does.
@@ -61,16 +75,7 @@ func serve(log *slog.Logger) error {
 		}
 	}
 	defer st.Close()
-	// Without a relay, the links to choose a new password are written to the log.
-	var sender mail.Sender
-	if addr := os.Getenv("GAMES_SMTP_ADDR"); addr != "" {
-		sender = mail.SMTP{
-			Addr: addr, User: os.Getenv("GAMES_SMTP_USER"), Password: os.Getenv("GAMES_SMTP_PASSWORD"),
-			From:     env("GAMES_MAIL_FROM", "noreply@games.lab.bingo"),
-			Envelope: env("GAMES_MAIL_ENVELOPE", "bounces@smtp.games.lab.bingo"),
-		}
-	}
-	srv, err := server.New(st, web.Files(), server.Config{TrustProxy: os.Getenv("GAMES_TRUST_PROXY") == "true", Log: log, Mail: sender, PublicURL: os.Getenv("GAMES_PUBLIC_URL")})
+	srv, err := server.New(st, web.Files(), cfg)
 	if err != nil {
 		return err
 	}

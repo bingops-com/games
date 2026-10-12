@@ -116,7 +116,7 @@ const NAME_KEY = 'games.name';
 const AVATAR_KEY = 'games.avatar';
 const TABLE_KEY = 'games.table';
 const GUEST_KEY = 'games.guest';
-export const CODE_LENGTH = 4;
+export const CODE_LENGTH = 8;
 export const NAME_MAX = 16;
 
 const initial: State = { ready: false, lang: 'fr', account: null, name: '', guest: '', avatar: '', guestAvatar: '', objectives: [], pals: [], invites: [], friends: null, asks: [], muted: [], table: null, modal: null, sound: true, full: false, toasts: [] };

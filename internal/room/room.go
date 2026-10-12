@@ -4,12 +4,14 @@
 package room
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
+	"math/big"
 	mrand "math/rand/v2"
 	"slices"
 	"strings"
@@ -21,7 +23,7 @@ import (
 )
 
 const (
-	codeLength = 4
+	codeLength = 8
 	// Without I or O, which read as 1 and 0 when a code is spelt out.
 	codeLetters = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 	maxRooms    = 500
@@ -168,15 +170,16 @@ type ChatLine struct {
 // saved is what a room keeps across a restart: who is there, what they
 // chose and the evening's score. A game being played is not kept.
 type saved struct {
-	Game    string         `json:"game"`
-	Public  bool           `json:"public"`
-	Limit   int            `json:"limit,omitempty"`
-	ByVote  bool           `json:"byVote,omitempty"`
-	Opts    map[string]int `json:"opts,omitempty"`
-	Words   []string       `json:"words,omitempty"`
-	Banned  []string       `json:"banned,omitempty"`
-	Played  int            `json:"played"`
-	Members []savedMember  `json:"members"`
+	Occupied bool           `json:"occupied"`
+	Game     string         `json:"game"`
+	Public   bool           `json:"public"`
+	Limit    int            `json:"limit,omitempty"`
+	ByVote   bool           `json:"byVote,omitempty"`
+	Opts     map[string]int `json:"opts,omitempty"`
+	Words    []string       `json:"words,omitempty"`
+	Banned   []string       `json:"banned,omitempty"`
+	Played   int            `json:"played"`
+	Members  []savedMember  `json:"members"`
 }
 
 type savedMember struct {
@@ -191,6 +194,10 @@ type savedMember struct {
 // Restore reopens a room saved before a restart, in its lobby. Its players
 // are expected back: their pages reconnect by themselves.
 func (h *Hub) Restore(code string, state []byte) {
+	// Old short invitation codes must not survive the security upgrade.
+	if len(code) != codeLength || strings.ContainsFunc(code, func(c rune) bool { return !strings.ContainsRune(codeLetters, c) }) {
+		return
+	}
 	var sv saved
 	if json.Unmarshal(state, &sv) != nil {
 		return
@@ -222,7 +229,7 @@ func (r *Room) persist() {
 		return
 	}
 	r.dirty = false
-	sv := saved{Game: r.spec.ID, Public: r.public, Limit: r.limit, ByVote: r.byVote, Opts: r.opts, Words: r.words, Played: r.played}
+	sv := saved{Occupied: len(r.clients) > 0, Game: r.spec.ID, Public: r.public, Limit: r.limit, ByVote: r.byVote, Opts: r.opts, Words: r.words, Played: r.played}
 	for id := range r.banned {
 		sv.Banned = append(sv.Banned, id)
 	}
@@ -325,9 +332,12 @@ func (h *Hub) Create(game string, public bool) (*Room, error) {
 	}
 	for {
 		raw := make([]byte, codeLength)
-		rand.Read(raw)
-		for i, b := range raw {
-			raw[i] = codeLetters[int(b)%len(codeLetters)]
+		for i := range raw {
+			n, err := rand.Int(rand.Reader, big.NewInt(int64(len(codeLetters))))
+			if err != nil {
+				return nil, err
+			}
+			raw[i] = codeLetters[n.Int64()]
 		}
 		code := string(raw)
 		if h.rooms[code] == nil {
@@ -398,7 +408,11 @@ func (h *Hub) Get(code string) *Room {
 }
 
 // Game returns the id of the game a table is for.
-func (r *Room) Game() string { return r.spec.ID }
+func (r *Room) Game() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.spec.ID
+}
 
 // Sweep forgets the tables nobody has been connected to for a while.
 func (h *Hub) Sweep() {
@@ -438,8 +452,27 @@ func (r *Room) member(id string) *member {
 // Join connects a player to the table. A player already there (another tab,
 // or back after a lost connection) keeps their place.
 func (r *Room) Join(who Who) (*Client, error) {
+	return r.JoinContext(context.Background(), who)
+}
+
+func (r *Room) JoinContext(ctx context.Context, who Who) (*Client, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(r.clients) >= 48 {
+		return nil, Error("Trop de connexions ouvertes")
+	}
+	var connections int
+	for c := range r.clients {
+		if c.id == who.ID {
+			connections++
+		}
+	}
+	if connections >= 3 {
+		return nil, Error("Trop de connexions ouvertes")
+	}
 	if r.banned[who.ID] {
 		return nil, ErrBanned
 	}
@@ -474,6 +507,19 @@ func (c *Client) Close() {
 	if !r.drop(c) {
 		return
 	}
+	r.broadcast()
+}
+
+// drop accounts for every disconnection, including a full send queue. The
+// caller holds the room lock; broadcasting happens after the current send.
+func (r *Room) drop(c *Client) bool {
+	if c.gone {
+		return false
+	}
+	c.gone = true
+	delete(r.clients, c)
+	close(c.Send)
+	r.dirty = true
 	if m := r.member(c.id); m != nil {
 		if m.conns--; m.conns == 0 {
 			m.left = time.Now()
@@ -486,16 +532,6 @@ func (c *Client) Close() {
 	if len(r.clients) == 0 {
 		r.empty = time.Now()
 	}
-	r.broadcast()
-}
-
-func (r *Room) drop(c *Client) bool {
-	if c.gone {
-		return false
-	}
-	c.gone = true
-	delete(r.clients, c)
-	close(c.Send)
 	return true
 }
 
@@ -593,6 +629,12 @@ type message struct {
 
 // Handle applies a message received from a connection.
 func (c *Client) Handle(raw []byte) {
+	c.HandleContext(context.Background(), raw)
+}
+
+// Check cancellation while holding the room lock: a queued action cannot
+// acquire authority after logout merely because it was read beforehand.
+func (c *Client) HandleContext(ctx context.Context, raw []byte) {
 	var msg message
 	if json.Unmarshal(raw, &msg) != nil {
 		return
@@ -600,7 +642,7 @@ func (c *Client) Handle(raw []byte) {
 	r := c.room
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if c.gone {
+	if c.gone || ctx.Err() != nil {
 		return
 	}
 	if err := r.handle(c, msg); err != nil {
@@ -620,6 +662,9 @@ func (c *Client) Handle(raw []byte) {
 	}
 	// A line of conversation went to everyone already and changes nothing else.
 	if msg.T == "chat" {
+		if r.dirty {
+			r.broadcast()
+		}
 		return
 	}
 	if msg.T != "act" {
@@ -805,7 +850,7 @@ func (r *Room) handle(c *Client, msg message) error {
 		r.phase, r.winners = "playing", nil
 		r.gone, r.void = map[int]bool{}, false
 		r.stop = make(chan struct{})
-		go r.run(r.stop)
+		go r.run(r.stop, r.spec.Rate)
 	case "lobby":
 		if !host || r.phase == "lobby" {
 			return Error("Seul l'hôte arrête la partie")
@@ -832,6 +877,16 @@ func (r *Room) handle(c *Client, msg message) error {
 		}
 		if m.seat < 0 {
 			return Error("Vous regardez cette partie : vous jouerez la suivante")
+		}
+		// Team and role choices belong to every player; starting the word grid
+		// belongs to the current room host, not to a fixed seat or clue giver.
+		if r.spec.ID == "pavillons" && !host {
+			var action struct {
+				T string `json:"t"`
+			}
+			if json.Unmarshal(msg.A, &action) == nil && action.T == "begin" {
+				return Error("Seul l'hôte lance la partie")
+			}
 		}
 		if err := r.game.Act(m.seat, msg.A, now); err != nil {
 			return err
@@ -882,8 +937,8 @@ func (r *Room) finish(forfeit bool) {
 }
 
 // run lets time pass in the game until it is stopped.
-func (r *Room) run(stop chan struct{}) {
-	tick := time.NewTicker(r.spec.Rate)
+func (r *Room) run(stop chan struct{}, rate time.Duration) {
+	tick := time.NewTicker(rate)
 	defer tick.Stop()
 	for {
 		select {
@@ -976,6 +1031,9 @@ type state struct {
 }
 
 func (c *Client) push(v any) {
+	if c.gone {
+		return
+	}
 	raw, err := json.Marshal(v)
 	if err != nil {
 		return
@@ -990,6 +1048,7 @@ func (c *Client) push(v any) {
 
 // broadcast sends every connection what its player may see.
 func (r *Room) broadcast() {
+	connections := len(r.clients)
 	now := time.Now()
 	st := state{T: "state", Now: now.UnixMilli(), Code: r.Code, Game: r.spec.ID, Min: r.spec.Min, Max: r.spec.Max, Phase: r.phase, Winners: r.winners, Void: r.void, Members: []memberView{}}
 	if len(r.members) > 0 {
@@ -1020,5 +1079,10 @@ func (r *Room) broadcast() {
 			st.View = views[st.Seat]
 		}
 		c.push(st)
+	}
+	// A slow client may have been removed while sending this snapshot. Publish
+	// the resulting membership and persist it; each repeat removes a client.
+	if len(r.clients) < connections {
+		r.broadcast()
 	}
 }

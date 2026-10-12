@@ -13,10 +13,30 @@ metadata:
 spec:
   instances: {{ .instances }}
   bootstrap:
+    {{- if .recovery.enabled }}
+    recovery:
+      source: games-recovery
+      database: {{ .database }}
+      owner: {{ .owner }}
+      {{- if .recovery.targetTime }}
+      recoveryTarget:
+        targetTime: {{ .recovery.targetTime | quote }}
+      {{- end }}
+    {{- else }}
     initdb:
       database: {{ .database }}
       owner: {{ .owner }}
       dataChecksums: true
+    {{- end }}
+  {{- if .recovery.enabled }}
+  externalClusters:
+    - name: games-recovery
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: {{ .recovery.objectStore | default $name }}
+          serverName: {{ .recovery.serverName }}
+  {{- end }}
   storage:
     size: {{ .storage.size }}
     {{- with .storage.storageClass }}

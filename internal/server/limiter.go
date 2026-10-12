@@ -13,6 +13,8 @@ type limiter struct {
 	buckets map[string]*bucket
 }
 
+const maxLimiterKeys = 4096
+
 type bucket struct {
 	tokens float64
 	seen   time.Time
@@ -28,6 +30,10 @@ func (l *limiter) allow(key string) bool {
 	defer l.mu.Unlock()
 	b := l.buckets[key]
 	if b == nil {
+		// Fail closed under address/identity churn instead of growing forever.
+		if len(l.buckets) >= maxLimiterKeys {
+			return false
+		}
 		b = &bucket{tokens: l.burst, seen: now}
 		l.buckets[key] = b
 	}
