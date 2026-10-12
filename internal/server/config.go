@@ -17,11 +17,8 @@ func (c Config) Validate() error {
 			return errors.New("production requires a public HTTPS GAMES_PUBLIC_URL")
 		}
 	}
-	if (c.Production || c.Mail != nil) && c.PublicURL == "" {
-		return errors.New("GAMES_PUBLIC_URL is required when mail or production is enabled")
-	}
-	if c.Production && c.Mail == nil {
-		return errors.New("production requires GAMES_SMTP_ADDR; recovery links are never logged")
+	if c.Production && c.PublicURL == "" {
+		return errors.New("GAMES_PUBLIC_URL is required in production")
 	}
 	return nil
 }

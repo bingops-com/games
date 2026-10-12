@@ -24,30 +24,12 @@ imagePullSecrets: []
 # Secure and HSTS is sent. Set to false only if pods are reached directly.
 trustProxy: true
 
-# The address players reach the site at, written in the links sent by mail,
-# e.g. https://games.lab.bingo. Required with mail or production; never taken
-# from request headers.
+# Canonical public HTTPS origin, required in production.
 publicUrl: ""
-
-# Links to choose a new password are sent through an SMTP relay that signs
-# them (DKIM). Use port 587 with STARTTLS. Without a relay mail is disabled,
-# never logged.
-mail:
-  relay: ""
-  # Verify this certificate name when dialing an internal Kubernetes Service.
-  # Empty verifies the relay hostname; certificate checks are always enabled.
-  serverName: ""
-  from: noreply@games.lab.bingo
-  # Where bounces go, and the name SPF is checked against.
-  envelope: bounces@smtp.games.lab.bingo
-  # Optional existing Secret with username/password keys, not literal values.
-  existingSecret: ""
-  # Optional public login. Otherwise read username from the Secret.
-  username: ""
 
 # The CNI must enforce NetworkPolicy. Only these proxies may reach the server.
 # Add the Cloudflare connector's namespace AND pod labels if a tunnel connects
-# directly to the service. Egress is DNS, PostgreSQL and the SMTP relay only.
+# directly to the service. Egress is DNS and PostgreSQL only.
 networkPolicy:
   enabled: true
   ingressFrom:
@@ -67,14 +49,6 @@ networkPolicy:
   # Empty selects the CNPG cluster owned by this release. Required with an
   # external database; use explicit pod/namespace selectors or a narrow CIDR.
   databaseTo: []
-  smtpTo:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: mail
-      podSelector:
-        matchLabels:
-          app.kubernetes.io/name: relay
-  smtpPort: 587
 
 service:
   type: ClusterIP

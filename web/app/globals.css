@@ -1022,25 +1022,26 @@ img.art {
 .invite .hint {
   margin-top: 0.6rem;
 }
-/* L'état de l'adresse : confirmée ou non, dit en toutes lettres avec son pictogramme. */
-.email-state {
+/* Les codes de récupération restent lisibles sur un petit écran. */
+.recovery-codes {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+  max-height: 15rem;
+  overflow: auto;
+}
+.recovery-codes code {
+  font-size: clamp(0.65rem, 2.6vw, 0.85rem);
+  user-select: all;
+}
+.recovery-saved {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin-bottom: 0.4rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: var(--r);
-  background: var(--tint);
-  font-size: 0.9375rem;
-  font-weight: 500;
+  gap: 0.6rem;
 }
-.email-state .ic {
-  color: var(--link);
-}
-.email-state:not(.ok) {
-  box-shadow: inset 0 0 0 1px var(--field-line);
-}
+.recovery-saved input { width: auto; }
+
 .account .stack {
   margin-top: 0.9rem;
 }

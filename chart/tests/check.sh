@@ -14,8 +14,10 @@ grep -E -q 'kind: ScheduledBackup' "$check_dir/render.yaml"
 grep -E -q 'automountServiceAccountToken: false' "$check_dir/render.yaml"
 grep -E -q 'readOnlyRootFilesystem: true' "$check_dir/render.yaml"
 grep -E -q 'name: GAMES_PRODUCTION' "$check_dir/render.yaml"
-grep -E -A1 'name: GAMES_SMTP_SERVER_NAME' "$check_dir/render.yaml" | grep -E -q 'smtp.games.example.invalid'
-grep -E -A1 'name: GAMES_SMTP_USER' "$check_dir/render.yaml" | grep -E -q 'games@games.example.invalid'
+if grep -E -q 'GAMES_SMTP_|GAMES_MAIL_|port: (25|465|587)$' "$check_dir/render.yaml"; then
+  printf 'FAIL: retired mail dependency rendered\n' >&2
+  exit 1
+fi
 grep -E -A3 'livenessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /livez'
 grep -E -A3 'readinessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /healthz'
 reject() {
@@ -28,9 +30,10 @@ reject() {
   printf 'Rejected: %s\n' "$label"
 }
 reject "multiple replicas" --set replicaCount=2
+reject "retired mail configuration" --set-string mail.relay=relay.mail.svc:587
+reject "missing DNS egress peers" --set-json 'networkPolicy.dnsTo=[]'
 reject "missing canonical URL" --set-string publicUrl=
 reject "HTTP origin" --set-string publicUrl=http://games.example.invalid
-reject "missing SMTP" --set-string mail.relay=
 reject "missing backups" --set database.cnpg.backup.enabled=false
 reject "floating image" --set-string image.tag=latest
 reject "missing backup credential reference" --set-string database.cnpg.backup.credentialsSecret=

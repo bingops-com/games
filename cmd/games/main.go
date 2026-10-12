@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bingops-com/games/internal/mail"
 	"github.com/bingops-com/games/internal/server"
 	"github.com/bingops-com/games/internal/store"
 	"github.com/bingops-com/games/web"
@@ -38,17 +37,7 @@ func serve(log *slog.Logger) error {
 		return errors.New("GAMES_DATABASE_URL is not set (postgres://user:password@host:5432/games)")
 	}
 	production := os.Getenv("GAMES_PRODUCTION") == "true"
-	var sender mail.Sender
-	if addr := os.Getenv("GAMES_SMTP_ADDR"); addr != "" {
-		sender = mail.SMTP{
-			Addr: addr, User: os.Getenv("GAMES_SMTP_USER"), Password: os.Getenv("GAMES_SMTP_PASSWORD"),
-			ServerName: os.Getenv("GAMES_SMTP_SERVER_NAME"),
-			From:       env("GAMES_MAIL_FROM", "noreply@games.lab.bingo"),
-			Envelope:   env("GAMES_MAIL_ENVELOPE", "bounces@smtp.games.lab.bingo"),
-			RequireTLS: production || os.Getenv("GAMES_SMTP_REQUIRE_TLS") != "false",
-		}
-	}
-	cfg := server.Config{Production: production, TrustProxy: os.Getenv("GAMES_TRUST_PROXY") == "true", Log: log, Mail: sender, PublicURL: os.Getenv("GAMES_PUBLIC_URL")}
+	cfg := server.Config{Production: production, TrustProxy: os.Getenv("GAMES_TRUST_PROXY") == "true", Log: log, PublicURL: os.Getenv("GAMES_PUBLIC_URL")}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}

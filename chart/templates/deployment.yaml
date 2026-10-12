@@ -47,36 +47,6 @@ spec:
             - name: GAMES_PUBLIC_URL
               value: {{ . | quote }}
             {{- end }}
-            {{- if .Values.mail.relay }}
-            - name: GAMES_SMTP_ADDR
-              value: {{ .Values.mail.relay | quote }}
-            {{- with .Values.mail.serverName }}
-            - name: GAMES_SMTP_SERVER_NAME
-              value: {{ . | quote }}
-            {{- end }}
-            - name: GAMES_MAIL_FROM
-              value: {{ .Values.mail.from | quote }}
-            - name: GAMES_MAIL_ENVELOPE
-              value: {{ .Values.mail.envelope | quote }}
-            - name: GAMES_SMTP_REQUIRE_TLS
-              value: "true"
-            {{- if .Values.mail.existingSecret }}
-            - name: GAMES_SMTP_USER
-              {{- if .Values.mail.username }}
-              value: {{ .Values.mail.username | quote }}
-              {{- else }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.mail.existingSecret }}
-                  key: username
-              {{- end }}
-            - name: GAMES_SMTP_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.mail.existingSecret }}
-                  key: password
-            {{- end }}
-            {{- end }}
           ports:
             - name: http
               containerPort: 3778

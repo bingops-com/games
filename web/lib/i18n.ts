@@ -19,10 +19,7 @@ export function initialLang(): Lang {
 const SERVER: Record<string, string> = {
   'Action illisible': 'Unreadable action',
   'Mot de passe incorrect': 'Wrong password',
-  "Cette adresse e-mail n'est pas valable": 'This email address is not valid',
-  "Il n'y a pas d'adresse à confirmer": 'There is no address to confirm',
-  'Cette adresse est déjà utilisée par un autre compte': 'This address is already used by another account',
-  'Ce lien ne marche plus : demandez-en un nouveau': 'This link no longer works: ask for a new one',
+  'Pseudo ou code de récupération incorrect': 'Incorrect username or recovery code',
   "Ce pseudo n'est pas accepté": 'This username is not accepted',
   "Ce joueur n'est pas joignable": 'This player cannot be reached',
   'Motif inconnu': 'Unknown reason',

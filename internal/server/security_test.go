@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -51,22 +50,6 @@ func auditSocketClosed(t *testing.T, conn *websocket.Conn) {
 			return
 		}
 	}
-}
-
-func auditConfirmed(t *testing.T, st *store.Store, name string) *store.User {
-	t.Helper()
-	u, err := st.UserByName(context.Background(), name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	key := tokenHash("synthetic confirmation for " + name)
-	if err := st.CreateCheck(context.Background(), u.ID, u.Email, key, time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.ConfirmEmail(context.Background(), key); err != nil {
-		t.Fatal(err)
-	}
-	return u
 }
 
 func TestSecurityStalePasswordCannotCreateSession(t *testing.T) {
@@ -132,13 +115,10 @@ func TestSecuritySessionSocketsRevoked(t *testing.T) {
 					}
 				}
 			case "reset":
-				u := auditConfirmed(t, st, "SocketOwner")
-				raw := strings.Repeat("a", 64)
-				if err := st.CreateReset(context.Background(), u.ID, u.Email, tokenHash(raw), time.Now().Add(time.Hour)); err != nil {
-					t.Fatal(err)
-				}
+				out := old.want(200, "POST", "/api/account/recovery-codes", `{"password":"long enough"}`)
+				raw := out["recoveryCodes"].([]any)[0].(string)
 				guest := player(t, ts, "")
-				guest.want(200, "POST", "/api/reset", fmt.Sprintf(`{"token":%q,"password":"recovered password"}`, raw))
+				guest.want(200, "POST", "/api/reset", fmt.Sprintf(`{"name":"SocketOwner","code":%q,"password":"recovered password"}`, raw))
 			}
 			auditSocketClosed(t, stale)
 			if old.signedIn() {
@@ -148,70 +128,7 @@ func TestSecuritySessionSocketsRevoked(t *testing.T) {
 	}
 }
 
-func TestSecurityResetSingleUseAndAddressChanges(t *testing.T) {
-	ts, st := start(t)
-	owner := player(t, ts, "RecoveryOwner")
-	u := auditConfirmed(t, st, "RecoveryOwner")
-	ctx := context.Background()
-	raw := strings.Repeat("b", 64)
-	key := tokenHash(raw)
-	if err := st.CreateReset(ctx, u.ID, u.Email, key, time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	// Both HTTP requests pass the cheap lookup before hashing is released.
-	for range cap(hashing) {
-		hashing <- struct{}{}
-	}
-	release := sync.OnceFunc(func() {
-		for range cap(hashing) {
-			<-hashing
-		}
-	})
-	defer release()
-	statuses := make(chan int, 2)
-	for i := range 2 {
-		go func(i int) {
-			res, err := http.Post(ts.URL+"/api/reset", "application/json", strings.NewReader(fmt.Sprintf(`{"token":%q,"password":"synthetic password %d"}`, raw, i)))
-			if err != nil {
-				statuses <- 0
-				return
-			}
-			res.Body.Close()
-			statuses <- res.StatusCode
-		}(i)
-	}
-	time.Sleep(100 * time.Millisecond)
-	release()
-	a, b := <-statuses, <-statuses
-	if !((a == 200 && b == 410) || (a == 410 && b == 200)) {
-		t.Fatalf("single-use reset statuses: %d, %d", a, b)
-	}
-	if owner.signedIn() {
-		t.Fatal("reset did not revoke the old session")
-	}
-	if err := st.CreateReset(ctx, u.ID, u.Email, key, time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
-	_, currentHash, err := st.Credentials(ctx, u.Name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.SetEmail(ctx, u.ID, "new@audit.invalid", currentHash); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.ResetPassword(ctx, key, dummyHash); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("old-address link still accepted:", err)
-	}
-	if err := st.CreateReset(ctx, u.ID, u.Email, key, time.Now().Add(time.Hour)); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("stale asynchronous email request created a reset:", err)
-	}
-	if err := st.CreateCheck(ctx, u.ID, u.Email, key, time.Now().Add(time.Hour)); !errors.Is(err, store.ErrNotFound) {
-		t.Fatal("stale asynchronous email request created a confirmation:", err)
-	}
-}
-
 func TestSecurityProductionConfig(t *testing.T) {
-	box := &outbox{}
 	for _, tc := range []struct {
 		name  string
 		cfg   Config
@@ -219,13 +136,12 @@ func TestSecurityProductionConfig(t *testing.T) {
 	}{
 		{"local without mail", Config{}, true},
 		{"missing production values", Config{Production: true}, false},
-		{"missing mail", Config{Production: true, PublicURL: "https://games.audit.invalid"}, false},
-		{"missing origin", Config{Mail: box}, false},
-		{"HTTP production", Config{Production: true, Mail: box, PublicURL: "http://games.audit.invalid"}, false},
-		{"credentials in origin", Config{Mail: box, PublicURL: "https://fake:fake@games.audit.invalid"}, false},
-		{"query in origin", Config{Mail: box, PublicURL: "https://games.audit.invalid/?host=evil"}, false},
-		{"path in origin", Config{Mail: box, PublicURL: "https://games.audit.invalid/path"}, false},
-		{"valid production", Config{Production: true, Mail: box, PublicURL: "https://games.audit.invalid/"}, true},
+		{"production without mail", Config{Production: true, PublicURL: "https://games.audit.invalid"}, true},
+		{"HTTP production", Config{Production: true, PublicURL: "http://games.audit.invalid"}, false},
+		{"credentials in origin", Config{PublicURL: "https://fake:fake@games.audit.invalid"}, false},
+		{"query in origin", Config{PublicURL: "https://games.audit.invalid/?host=evil"}, false},
+		{"path in origin", Config{PublicURL: "https://games.audit.invalid/path"}, false},
+		{"valid production", Config{Production: true, PublicURL: "https://games.audit.invalid/"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.cfg.Validate(); (err == nil) != tc.valid {
@@ -233,15 +149,7 @@ func TestSecurityProductionConfig(t *testing.T) {
 			}
 		})
 	}
-	s := &Server{cfg: Config{PublicURL: "https://games.audit.invalid/"}}
-	r := httptest.NewRequest("POST", "http://recovery.attacker.invalid/api/forgot", nil)
-	r.Header.Set("X-Forwarded-Host", "recovery.attacker.invalid")
-	if got := s.baseURL(r); got != "https://games.audit.invalid" {
-		t.Fatal("request controlled recovery origin:", got)
-	}
-	if got := (&Server{}).baseURL(r); got != "" {
-		t.Fatal("unset origin fell back to request:", got)
-	}
+	r := httptest.NewRequest("POST", "http://games.audit.invalid/api/reset", nil)
 	r.Header.Set("X-Forwarded-Proto", "http")
 	if !(&Server{cfg: Config{Production: true, TrustProxy: true}}).secure(r) {
 		t.Fatal("production cookie security was downgraded by proxy headers")

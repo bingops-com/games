@@ -96,8 +96,8 @@ moteurs de recherche.
 ## Comptes
 
 - Jouer en invité sous un nom du type `Poulpe-Tenace` (tiré au hasard, avec un lien pour en tirer un autre), modifiable, ou créer un
-  compte (pseudo, adresse e-mail et mot de passe ; l'adresse ne sert qu'à
-  récupérer un mot de passe perdu).
+  compte avec pseudo et mot de passe, sans e-mail ni SMS. Dix codes de
+  récupération sont affichés une seule fois et peuvent être téléchargés.
 - **Profil public** : `/u/<pseudo>` montre à tout le monde le pseudo, la date
   d'inscription, le nombre d'amis et les statistiques par jeu (parties jouées,
   victoires). Il ne montre jamais qui sont les amis.
@@ -141,27 +141,22 @@ La configuration LabOps est préparée dans `apps/workloads/games` du dépôt
 
 Le responsable de la mise en service est l'opérateur LabOps. Les prérequis sont
 CloudNativePG et son plugin Barman Cloud, un stockage persistant, un CNI qui
-applique les NetworkPolicy, le proxy HTTPS et un relais SMTP fonctionnel. Avec
-l'Ingress fourni : Traefik et cert-manager, émetteur `letsencrypt-cloudflare`
-(modifiable dans `ingress.annotations`). Le relais doit proposer STARTTLS avec
-un certificat d'une autorité reconnue par l'image, valide pour le nom de
-`mail.relay` ou de `mail.serverName` si le relais est un Service interne ;
-vérifier aussi la délivrabilité et SPF/DKIM/DMARC avant ouverture.
+applique les NetworkPolicy et le proxy HTTPS. Avec l'Ingress fourni : Traefik
+et cert-manager, émetteur `letsencrypt-cloudflare` (modifiable dans
+`ingress.annotations`). Aucun relais SMTP, fournisseur mail ou SMS n'est requis.
 
 Le chart passe automatiquement en production avec `ingress.enabled=true`.
 Pour un tunnel qui atteint directement le Service, mettre explicitement
 `production=true`. Il refuse les configurations de production sans URL HTTPS,
-SMTP, image épinglée, isolation réseau et sauvegarde continue. Valeurs à
+image épinglée, isolation réseau et sauvegarde continue. Valeurs à
 déclarer dans la source GitOps LabOps, sans identifiants en clair :
 
 | Valeur | Rôle |
 | --- | --- |
 | `image.repository`, `image.digest` ou `image.tag` | Image GHCR épinglée par `sha256:…` ou `sha-<commit de 40 caractères>` |
 | `production`, `publicUrl`, `ingress.*` | Origine HTTPS publique ; doit correspondre à l'Ingress s'il est activé |
-| `mail.relay`, `mail.existingSecret` | Relais STARTTLS ; éventuel Secret existant avec clés `username` et `password` (ou `mail.username` public et clé `password`) |
-| `mail.serverName` | Nom DNS du certificat TLS lorsque `mail.relay` utilise un nom de Service interne ; vide : vérifie le nom du relais |
 | `networkPolicy.ingressFrom` | Namespace **et** labels des pods des seuls proxies autorisés ; adapter pour Cloudflare Tunnel |
-| `networkPolicy.dnsTo`, `databaseTo`, `smtpTo`, `smtpPort` | Sorties limitées au DNS, à PostgreSQL et au relais ; vérifier les vrais labels du cluster |
+| `networkPolicy.dnsTo`, `databaseTo` | Sorties limitées au DNS et à PostgreSQL ; vérifier les vrais labels du cluster |
 | `database.cnpg.storage` | Taille et classe du volume de la base (2 Gi) |
 | `database.cnpg.backup.*` | Activer sauvegarde quotidienne, archivage WAL, destination S3, Secret des clés, rétention et génération d'archive |
 | `database.cnpg.recovery.*` | Restauration déclarative d'un **nouveau** cluster depuis une génération d'archive précédente |
@@ -169,7 +164,7 @@ déclarer dans la source GitOps LabOps, sans identifiants en clair :
 
 La NetworkPolicy ne sélectionne que le serveur Games, pas les pods CNPG ; le
 runbook CloudNativePG de LabOps possède la sécurité et l'accès S3 de la base.
-Les valeurs par défaut restent privées, sans e-mail ni sauvegarde : elles ne
+Les valeurs par défaut restent privées, sans sauvegarde : elles ne
 constituent pas une configuration publique. Le Service reste `ClusterIP`.
 
 **Un seul réplica, stratégie `Recreate`.** Les salons actifs ne sont pas
@@ -196,7 +191,7 @@ helm template games chart --namespace games --values /path/to/production-values.
 
 `chart/tests/production.yaml` contient uniquement des valeurs fictives de test,
 jamais une configuration à déployer. Le feu vert opérationnel exige en plus
-un certificat HTTPS valide, une confirmation/récupération par e-mail réelle,
+un certificat HTTPS valide, une récupération par code et la révocation des sessions,
 un archivage WAL et une sauvegarde réussis, une restauration contrôlée et un
 test effectif de l'isolation réseau. Ces contrôles en cluster ne sont pas
 remplacés par `helm template` et ne sont pas exécutés implicitement.
@@ -208,13 +203,13 @@ Les salons sauvegardés occupés restent restaurables même après une longue
 attente sans changement. Les salons sauvegardés vides expirent après dix
 minutes. Une connexion lente libère sa présence et la main de son hôte.
 
-Les demandes de récupération sont limitées à un e-mail par compte toutes
-les cinq minutes, même en alternant pseudo, adresse e-mail et IP. Une nouvelle
-demande conserve les liens précédents jusqu’à leur expiration ; une récupération
-réussie les invalide tous avec les sessions existantes.
-Les modifications du mot de passe et de l'adresse de récupération revérifient
-atomiquement le condensé validé : une requête ancienne ne peut pas annuler une
-réinitialisation concurrente.
+Les tentatives de récupération sont limitées par IP, globalement et par pseudo
+sans distinction de casse (cinq tentatives, puis une toutes les trente secondes).
+Un code est consommé, le mot de passe modifié et les sessions fermées dans une
+transaction ; une double utilisation concurrente a un seul gagnant. Les codes
+restants continuent de fonctionner. Le renouvellement des codes et le changement
+du mot de passe revérifient atomiquement le condensé validé : une requête ancienne
+ne peut pas annuler une récupération concurrente.
 
 ### Entrées sensibles et reprise
 
@@ -233,12 +228,17 @@ Pour pouvoir reconstruire sans l'historique d'une conversation :
   `backup.credentialsSecret`. Procédure propriétaire : runbook CloudNativePG
   de LabOps, `docs/infrastructure/cloudnative-pg.md`. Vérifier les statuts
   `ContinuousArchiving`, `Backup` et `ScheduledBackup`, sans afficher le Secret.
-- **SMTP** : le relais transactionnel STARTTLS et ses DNS relèvent de LabOps ; runbook
-  `apps/workloads/games/README.md`. Si authentification requise, conserver
-  les identifiants d'envoi uniquement dans Bitwarden `labprod`, les synchroniser et
-  référencer `mail.existingSecret`. Faire tourner le compte du relais puis
-  mettre à jour le secret Bitwarden ; vérifier par un compte de test, jamais par
-  un journal de liens.
+- **Codes de récupération** : credentials personnels des joueurs, sauvegardés
+  par leur propriétaire dans un gestionnaire de mots de passe ou un fichier privé.
+  PostgreSQL ne garde que les empreintes SHA-256 de codes aléatoires de 128 bits ;
+  elles suivent les sauvegardes CNPG. Les codes ne sont jamais envoyés à Bitwarden,
+  dans les journaux, dans une URL ni dans le stockage persistant du navigateur.
+  En cas de perte, un joueur encore muni de son mot de passe peut renouveler les
+  codes depuis « Mon compte » ; sans les deux, il n'existe pas de récupération
+  opérateur. Après restauration d'une ancienne sauvegarde, des codes déjà utilisés
+  peuvent redevenir valides : avant réouverture, invalider tous les codes restaurés
+  et toutes les sessions, puis faire renouveler les codes après connexion avec mot
+  de passe. Voir le runbook LabOps pour cette opération explicitement autorisée.
 - **CI et registre** : `GITHUB_TOKEN` est éphémère et fourni par GitHub. Si
   l'image reste privée, conserver le jeton de lecture GHCR dans Bitwarden et
   un `imagePullSecrets` scellé ; recréer/faire tourner le jeton depuis le compte
@@ -317,30 +317,33 @@ par objectif.
 
 ## Récupérer un compte
 
-Un compte se crée avec une adresse e-mail, une seule par compte. À
-l'inscription, et chaque fois qu'elle change, un lien valable trois jours y est
-envoyé : l'ouvrir (`/confirmer/?t=…`, connecté ou non) la confirme. Elle se
-change sur la page « Mon compte » avec le mot de passe en confirmation, mais ne
-se retire plus ; la page dit si elle est confirmée et renvoie le lien. Les
-adresses données avant l'existence du lien sont tenues pour confirmées, et les
-comptes plus anciens encore n'en ont pas tant qu'ils n'en règlent pas une.
+Un compte se crée avec un pseudo et un mot de passe. La réponse initiale affiche
+dix codes de récupération de 128 bits chacun, à usage unique et sans date
+d'expiration. Enregistrer les codes dans un gestionnaire de mots de passe ou
+télécharger le fichier privé, puis confirmer leur sauvegarde. Les codes ne sont
+pas réaffichés après fermeture et restent uniquement en mémoire dans l'onglet
+tant que la fenêtre est ouverte. Un rechargement les perd : se connecter avec le
+mot de passe et en créer de nouveaux si nécessaire.
 
-« Mot de passe oublié ? » envoie à une adresse **confirmée** un lien valable
-une heure, utilisable une fois, qui fait choisir un nouveau mot de passe,
-connecte, et ferme toutes les autres sessions. La réponse est la même que le
-compte existe, ait une adresse confirmée ou non. Un compte sans adresse
-confirmée ne se récupère pas.
+« Mot de passe oublié ? » ou `/reinitialiser/` demande le pseudo, un code et un
+nouveau mot de passe. La récupération consomme ce code une seule fois, conserve
+les neuf autres, ferme toutes les anciennes sessions HTTP et WebSocket, puis
+connecte le joueur. Un pseudo inconnu, un mauvais code et un code utilisé ont le
+même message d'erreur. Aucun e-mail ou SMS ne part.
 
-L'envoi passe par un relais SMTP (`GAMES_SMTP_ADDR`, `hôte:port` ; au besoin
-`GAMES_SMTP_USER` et `GAMES_SMTP_PASSWORD`). `GAMES_SMTP_SERVER_NAME` permet
-de vérifier le nom public du certificat en joignant un Service interne,
-sans désactiver la validation TLS. `GAMES_MAIL_FROM` et
-`GAMES_MAIL_ENVELOPE` donnent l'expéditeur lu et celui de l'enveloppe, et
-`GAMES_PUBLIC_URL` l'adresse du site écrite dans les liens. Sans relais, les
-liens sont seulement écrits dans le journal du serveur : c'est ce qui se passe
-en développement. Le relais du lab, sa signature DKIM et ses enregistrements
-SPF et DMARC sont dans le dépôt labops (`apps/platform/mail/labprod`,
-`terraform/cloudflare/games-mail.tf`).
+« Mon compte » indique le nombre de codes restants. Le renouvellement exige une
+session connectée et le mot de passe actuel, remplace tous les anciens codes et
+déconnecte les autres appareils. Les anciens comptes gardent leur pseudo et leur
+mot de passe ; un avertissement les invite à créer leurs codes. Sans mot de passe
+et sans code, le compte est irrécupérable.
+
+La migration ajoute `recovery_codes` sans supprimer les comptes ni leurs données
+historiques. Les anciennes colonnes d'adresse restent conservées pour éviter une
+suppression implicite, mais ne sont plus lues ni exposées ; les anciens liens et
+routes de récupération par e-mail sont désactivés. L'ancien binaire ne prend pas
+en charge cette nouvelle version du schéma : prévoir une maintenance et un plan
+de reprise avant toute mise en service, et ne pas rétablir l'ancienne récupération
+par mail contre cette base.
 
 ## Dans un salon
 
@@ -398,7 +401,7 @@ invitations vivent dans la mémoire du serveur, comme les salons.
 
 ## API
 
-- `POST /api/register` : `{name, password, email}`, l'adresse est obligatoire.
+- `POST /api/register` : `{name, password}`, retourne `user` et les dix `recoveryCodes` une seule fois.
   `/api/login`, `/api/logout` : `{name, password}`.
 - `GET /api/me` : le compte connecté, avec son avatar, ses objectifs et sa
   série ; sans session, `{"user": null}` et les objectifs à zéro.
@@ -411,11 +414,13 @@ invitations vivent dans la mémoire du serveur, comme les salons.
   l'on se trouve.
 - `GET /api/profile/{pseudo}` : le profil public, et ce qui lie le visiteur
   connecté à ce joueur (`self`, `none`, `sent`, `received`, `friends`).
-- `POST /api/account/email/check` renvoie le lien de confirmation ;
-  `POST /api/confirm` `{token}` confirme l'adresse.
-- `POST /api/account/email` `{email, password}` et `/api/account/password`
-  `{old, new}` : l'adresse et le mot de passe du compte. `POST /api/forgot`
-  `{name}` envoie le lien ; `POST /api/reset` `{token, password}` s'en sert.
+- `POST /api/account/recovery-codes` `{password}` : renouvelle les dix codes ;
+  retourne `user` et `recoveryCodes`. `GET /api/me` ne retourne que le compte et
+  `recoveryCodesRemaining`, jamais les codes eux-mêmes.
+- `POST /api/account/password` `{old, new}` : change le mot de passe.
+- `POST /api/reset` `{name, code, password}` : récupère le compte sans mail.
+  Les anciennes routes `/api/forgot`, `/api/confirm` et `/api/account/email*`
+  ne sont plus exposées.
 - `POST /api/blocks/add` et `/remove` `{name}` ; `POST /api/report`
   `{room, target, reason, text}`.
 - `GET /api/rooms` : les salons publics qui attendent des joueurs, avec leur

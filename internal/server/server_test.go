@@ -60,6 +60,11 @@ func (c *client) want(status int, method, path, body string) map[string]any {
 // testStore opens a store in a schema of its own, dropped when the test ends.
 // The tests need a PostgreSQL to talk to: GAMES_TEST_DATABASE_URL names it.
 func testStore(t *testing.T) *store.Store {
+	st, _ := testStoreURL(t)
+	return st
+}
+
+func testStoreURL(t *testing.T) (*store.Store, string) {
 	t.Helper()
 	base := os.Getenv("GAMES_TEST_DATABASE_URL")
 	if base == "" {
@@ -92,7 +97,7 @@ func testStore(t *testing.T) *store.Store {
 		admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE")
 		admin.Close()
 	})
-	return st
+	return st, u.String()
 }
 
 func start(t *testing.T) (*httptest.Server, *store.Store) {
@@ -121,7 +126,7 @@ func player(t *testing.T, ts *httptest.Server, name string) *client {
 	jar, _ := cookiejar.New(nil)
 	c := &client{t: t, http: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, base: ts.URL}
 	if name != "" {
-		c.want(200, "POST", "/api/register", `{"name":"`+name+`","password":"long enough","email":"`+name+`@players.test"}`)
+		c.want(200, "POST", "/api/register", `{"name":"`+name+`","password":"long enough"}`)
 	}
 	return c
 }
@@ -140,12 +145,15 @@ func TestAccounts(t *testing.T) {
 	}
 	c.want(400, "POST", "/api/register", `{"name":"x","password":"long enough","email":"bing@example.org"}`)
 	c.want(400, "POST", "/api/register", `{"name":"Bing","password":"short","email":"bing@example.org"}`)
-	// An account takes an address.
-	c.want(400, "POST", "/api/register", `{"name":"Bing","password":"long enough"}`)
-	c.want(400, "POST", "/api/register", `{"name":"Bing","password":"long enough","email":"not an address"}`)
-	out := c.want(200, "POST", "/api/register", `{"name":"Bing","password":"long enough","email":" bing@example.org "}`)
-	if u := out["user"].(map[string]any); u["name"] != "Bing" || u["email"] != "bing@example.org" {
-		t.Fatalf("register: %v", out)
+	out := c.want(200, "POST", "/api/register", `{"name":"Bing","password":"long enough"}`)
+	if u := out["user"].(map[string]any); u["name"] != "Bing" || u["recoveryCodesRemaining"] != 10.0 {
+		t.Fatalf("register returned incorrect account metadata")
+	}
+	if _, found := out["user"].(map[string]any)["email"]; found {
+		t.Fatal("account exposes an email")
+	}
+	if codes, ok := out["recoveryCodes"].([]any); !ok || len(codes) != 10 {
+		t.Fatal("missing initial recovery codes")
 	}
 	if !c.signedIn() {
 		t.Fatal("not signed in after registering")
@@ -156,8 +164,6 @@ func TestAccounts(t *testing.T) {
 	}
 	// The same pseudo in another case is the same player.
 	c.want(409, "POST", "/api/register", `{"name":"bing","password":"long enough","email":"other@example.org"}`)
-	// One address, one account, whatever its case.
-	c.want(409, "POST", "/api/register", `{"name":"Ana","password":"long enough","email":"BING@example.org"}`)
 	c.want(401, "POST", "/api/login", `{"name":"Bing","password":"wrong one"}`)
 	c.want(401, "POST", "/api/login", `{"name":"Nobody","password":"long enough"}`)
 	c.want(200, "POST", "/api/login", `{"name":"bing","password":"long enough"}`)

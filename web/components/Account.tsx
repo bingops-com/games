@@ -1,16 +1,16 @@
 'use client';
 
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
 import { App, useApp, useT } from '@/lib/app';
 import { Ic } from './ui';
+import { RecoveryForm } from './RecoveryCodes';
 
-// Mon compte : l'adresse qui permet de récupérer un mot de passe perdu, le mot de passe, et
-// les joueurs bloqués. Toucher à l'adresse ou au mot de passe redemande le mot de passe.
+// Mon compte : les codes de récupération, le mot de passe et les joueurs bloqués.
 export default function Account() {
   const { ready, account } = useApp();
   const t = useT();
+  const [busy, setBusy] = useState(false);
   if (!ready) return null;
   if (!account) {
     return (
@@ -23,19 +23,20 @@ export default function Account() {
       </div>
     );
   }
-  const saveEmail = async (e: FormEvent<HTMLFormElement>) => {
+  const regenerate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (busy) return;
     const form = e.currentTarget;
-    const f = new FormData(form);
+    setBusy(true);
     try {
-      const out = await App.setEmail(String(f.get('email')).trim(), String(f.get('password')));
-      App.toast(out.emailChecked ? t('Adresse enregistrée', 'Address saved') : t('Adresse enregistrée. Un lien y part pour la confirmer.', 'Address saved. A link is on its way to confirm it.'));
-      (form.elements.namedItem('password') as HTMLInputElement).value = '';
+      await App.regenerateRecoveryCodes(String(new FormData(form).get('password')));
+      form.reset();
     } catch (err) {
       App.toast((err as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
-  const resend = () => App.resendCheck().then(() => App.toast(t(`Lien envoyé à ${account.email}`, `Link sent to ${account.email}`)), (err: Error) => App.toast(err.message));
   const savePassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -54,29 +55,14 @@ export default function Account() {
       <p className="pitch">{account.name}</p>
 
       <section>
-        <h2><Ic name="mail" />{t('Adresse e-mail', 'Email address')}</h2>
-        {account.email ? (
-          <p className={account.emailChecked ? 'email-state ok' : 'email-state'} role="status">
-            <Ic name={account.emailChecked ? 'check' : 'lock'} />
-            {account.emailChecked
-              ? t('Adresse confirmée : elle peut servir à retrouver votre mot de passe.', 'Address confirmed: it can be used to recover your password.')
-              : t('Pas encore confirmée : ouvrez le lien envoyé à cette adresse. Tant qu’elle ne l’est pas, un mot de passe oublié ne se récupère pas.', 'Not confirmed yet: open the link sent to this address. Until then, a forgotten password cannot be recovered.')}
-            {!account.emailChecked && <button className="as-link" onClick={resend}>{t('Renvoyer le lien', 'Send the link again')}</button>}
-          </p>
-        ) : (
-          <p className="email-state" role="status"><Ic name="lock" />{t('Ce compte n’a pas d’adresse : un mot de passe oublié le ferait perdre. Donnez-en une.', 'This account has no address: a forgotten password would lose it. Give one.')}</p>
-        )}
-        <p className="hint">{t('Elle ne sert qu’à ça, et personne ne la voit.', 'It is used for that alone, and nobody sees it.')}</p>
-        <form className="stack" onSubmit={saveEmail}>
-          <label>
-            {t('Adresse e-mail', 'Email address')}
-            <input name="email" type="email" defaultValue={account.email} autoComplete="email" required maxLength={254} placeholder={t('vous@exemple.fr', 'you@example.com')} />
-          </label>
-          <label>
-            {t('Votre mot de passe, pour confirmer', 'Your password, to confirm')}
-            <input name="password" type="password" autoComplete="current-password" required maxLength={128} />
-          </label>
-          <button className="btn primary">{t('Enregistrer l’adresse', 'Save address')}</button>
+        <h2><Ic name="lock" />{t('Codes de récupération', 'Recovery codes')}</h2>
+        <p className="notice" role="status">{account.recoveryCodesRemaining > 0
+          ? t(`${account.recoveryCodesRemaining} codes disponibles. Ils ne sont pas réaffichés : gardez votre copie en lieu sûr.`, `${account.recoveryCodesRemaining} codes available. They cannot be shown again: keep your copy somewhere safe.`)
+          : t('Vous n’avez aucun code de récupération. Créez-en maintenant pour pouvoir retrouver votre compte.', 'You have no recovery codes. Create some now so you can recover your account.')}</p>
+        <p className="hint">{t('Créer de nouveaux codes invalide tous les anciens et déconnecte vos autres appareils. Sans mot de passe ni codes, le compte ne peut pas être récupéré.', 'Creating new codes invalidates all previous ones and signs out your other devices. Without your password or codes, the account cannot be recovered.')}</p>
+        <form className="stack" onSubmit={regenerate}>
+          <label>{t('Mot de passe actuel', 'Current password')}<input name="password" type="password" autoComplete="current-password" required maxLength={128} /></label>
+          <button className="btn primary" disabled={busy}>{t('Créer de nouveaux codes', 'Create new codes')}</button>
         </form>
       </section>
 
@@ -114,68 +100,13 @@ export default function Account() {
   );
 }
 
-// La page du lien reçu par e-mail : un nouveau mot de passe, et l'on est connecté.
 export function Reset() {
   const t = useT();
   const router = useRouter();
-  const token = useSearchParams().get('t') ?? '';
-  const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await App.reset(token, String(new FormData(e.currentTarget).get('password')));
-      App.toast(t('Mot de passe changé, vous êtes connecté.', 'Password changed, you are signed in.'));
-      router.push('/');
-    } catch (err) {
-      App.toast((err as Error).message);
-      setBusy(false);
-    }
-  };
-  if (!token) return <p className="notice">{t('Ce lien est incomplet.', 'This link is incomplete.')} <Link href="/">{t('Revenir à l’accueil', 'Back to the home page')}</Link></p>;
   return (
     <div className="friends account">
-      <h1>{t('Nouveau mot de passe', 'New password')}</h1>
-      <p className="pitch">{t('Choisissez-en un nouveau : vos autres appareils seront déconnectés.', 'Choose a new one: your other devices will be signed out.')}</p>
-      <form className="stack" onSubmit={submit}>
-        <label>
-          {t('Nouveau mot de passe', 'New password')}
-          <input name="password" type="password" autoComplete="new-password" required minLength={8} maxLength={128} autoFocus />
-        </label>
-        <button className="btn primary" disabled={busy}>{t('Enregistrer et me connecter', 'Save and sign me in')}</button>
-      </form>
-    </div>
-  );
-}
-
-// La page du lien de confirmation : l'adresse est confirmée dès qu'on l'ouvre, connecté ou non.
-export function Confirm() {
-  const t = useT();
-  const token = useSearchParams().get('t') ?? '';
-  const [state, setState] = useState<{ email?: string; error?: string }>({});
-  useEffect(() => {
-    if (!token) return;
-    App.confirmEmail(token).then((email) => setState({ email }), (err: Error) => setState({ error: err.message }));
-  }, [token]);
-  const home = <Link className="btn primary" href="/">{t('Aller jouer', 'Go and play')}</Link>;
-  if (!token) return <p className="notice">{t('Ce lien est incomplet.', 'This link is incomplete.')} <Link href="/">{t('Revenir à l’accueil', 'Back to the home page')}</Link></p>;
-  return (
-    <div className="friends account">
-      <h1>{t('Votre adresse e-mail', 'Your email address')}</h1>
-      {state.email && (
-        <>
-          <p className="pitch">{t(`${state.email} est confirmée. Si vous perdez votre mot de passe, un lien pour en choisir un autre y sera envoyé.`, `${state.email} is confirmed. If you lose your password, a link to choose another one will be sent there.`)}</p>
-          {home}
-        </>
-      )}
-      {state.error && (
-        <>
-          <p className="pitch">{state.error}</p>
-          <p className="hint">{t('Un lien de confirmation marche trois jours, une fois. Connectez-vous, puis demandez-en un autre sur la page « Mon compte ».', 'A confirmation link works for three days, once. Sign in, then ask for another one on the "My account" page.')}</p>
-          {home}
-        </>
-      )}
-      {!state.email && !state.error && <p className="pitch">{t('Confirmation en cours…', 'Confirming…')}</p>}
+      <h1>{t('Récupérer mon compte', 'Recover my account')}</h1>
+      <RecoveryForm onSuccess={() => router.push('/')} />
     </div>
   );
 }
