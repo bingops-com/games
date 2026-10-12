@@ -5,7 +5,7 @@
 //   npm run e2e -- ono amis  ceux dont le nom contient « ono » ou « amis »
 //
 // Ils créent des comptes « e2e_… » : à lancer contre une base de développement.
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const BASE = process.env.GAMES_URL ?? 'http://localhost:3778';
@@ -301,6 +301,39 @@ const scenarios = {
   async bombermat() {
     const { players: [host, guest] } = await room('Bombermat', 2);
     await start(host);
+    const arena = await host.locator('.pd').getAttribute('data-arena');
+    check(['classic', 'crossroads', 'bastions', 'rings'].includes(arena), `arène inconnue : ${arena}`);
+    check(await guest.locator('.pd').getAttribute('data-arena') === arena, 'les joueurs ne partagent pas la même arène');
+    check(await host.locator('.pd-scenery').getAttribute('data-scenery') === arena, 'le décor ne correspond pas à l’arène');
+    // Every restored asset must really be served and decoded, rather than
+    // silently receiving the SPA HTML fallback for a missing file.
+    const assets = await host.evaluate(async () => {
+      for (const arena of ['classic', 'crossroads', 'bastions', 'rings']) {
+        for (const kind of ['background', 'sprites']) {
+          const src = `/games/bombermat/${arena}-${kind}.webp`;
+          const response = await fetch(src);
+          if (!response.ok || !response.headers.get('content-type')?.includes('image/webp')) return false;
+          const image = new Image(); image.src = src; await image.decode();
+          if (!image.naturalWidth || !image.naturalHeight) return false;
+        }
+      }
+      return true;
+    });
+    check(assets, 'un des huit visuels Bombermat est absent ou invalide');
+    mkdirSync('/tmp/games-bombermat-preview', { recursive: true });
+    for (const colorScheme of ['light', 'dark']) {
+      await host.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+      for (const [width, height] of [[320, 700], [390, 844], [1280, 620], [1366, 768]]) {
+        await host.setViewportSize({ width, height });
+        check(await host.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `Bombermat déborde à ${width}px`);
+        check(await host.locator('.pd-fit').evaluate(e => {
+          const frame = e.getBoundingClientRect(), grid = e.querySelector('.pd-grid').getBoundingClientRect();
+          return grid.left >= frame.left - 1 && grid.right <= frame.right + 1 && grid.top >= frame.top - 1 && grid.bottom <= frame.bottom + 1;
+        }), `le terrain Bombermat sort de son cadre à ${width}×${height}`);
+        await host.screenshot({ path: `/tmp/games-bombermat-preview/${colorScheme}-${width}.png` });
+      }
+    }
+    await host.setViewportSize({ width: 1366, height: 768 });
     await host.locator('.pd-count').waitFor({ state: 'detached', timeout: 8000 });
     const at = async (page, sel) => {
       const m = /translate\(([-\d.]+)%, ([-\d.]+)%/.exec(await page.locator(sel).evaluate((e) => e.style.transform));

@@ -9,6 +9,11 @@ import {
   type FormEvent,
 } from "react";
 import { Dialog, Ic } from "./ui";
+import AdminDashboard, {
+  adminGameNames,
+  type Analytics,
+} from "./AdminDashboard";
+import type { IconName } from "../lib/icons";
 
 type Room = {
   code: string;
@@ -58,19 +63,26 @@ const date = (timestamp: number) =>
     dateStyle: "medium",
     timeStyle: "short",
   });
-const gameNames: Record<string, string> = {
-  terre: "Ono",
-  pavillons: "Codenoms",
-  meche: "BoomParty",
-  poudriere: "Bombermat",
-  skrib: "Skribouille",
-  gartik: "Gartik Phone",
+const gameNames = adminGameNames;
+const sectionIcons: Record<Section, IconName> = {
+  overview: "sliders",
+  rooms: "home",
+  users: "friends",
+  reports: "flag",
+  audit: "book",
 };
 
 export default function AdminPanel() {
   const [session, setSession] = useState<Session | null>(null);
   const [section, setSection] = useState<Section>("overview");
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [days, setDays] = useState(30);
+  const [updatedAt, setUpdatedAt] = useState(0);
+  const requestGeneration = useRef(0);
+  const mainContent = useRef<HTMLElement>(null);
+  const [reportsMore, setReportsMore] = useState(false);
+  const [auditMore, setAuditMore] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [audit, setAudit] = useState<Audit[]>([]);
@@ -146,33 +158,56 @@ export default function AdminPanel() {
   }, [session]);
   const reload = useCallback(async () => {
     if (!session) return;
+    const generation = ++requestGeneration.current;
     setLoading(true);
     setError("");
     try {
-      if (section === "overview" || section === "rooms")
-        setOverview(await api<Overview>("overview"));
+      if (section === "overview" || section === "rooms") {
+        const [nextOverview, nextAnalytics] = await Promise.all([
+          api<Overview>("overview"),
+          section === "overview"
+            ? api<Analytics>("analytics?days=" + days)
+            : Promise.resolve(null),
+        ]);
+        if (generation !== requestGeneration.current) return;
+        setOverview(nextOverview);
+        if (nextAnalytics) setAnalytics(nextAnalytics);
+      }
       if (section === "users") {
         const data = await api<{ users: User[]; next: string }>(
           "users?q=" + encodeURIComponent(query),
         );
+        if (generation !== requestGeneration.current) return;
         setUsers(data.users);
         setUserNext(data.next);
       }
-      if (section === "reports")
-        setReports(
-          (await api<{ reports: Report[] }>("reports?status=" + status))
-            .reports,
+      if (section === "reports") {
+        const data = await api<{ reports: Report[] }>(
+          "reports?status=" + status,
         );
-      if (section === "audit")
-        setAudit((await api<{ entries: Audit[] }>("audit")).entries);
+        if (generation !== requestGeneration.current) return;
+        setReports(data.reports);
+        setReportsMore(data.reports.length === 50);
+      }
+      if (section === "audit") {
+        const data = await api<{ entries: Audit[] }>("audit");
+        if (generation !== requestGeneration.current) return;
+        setAudit(data.entries);
+        setAuditMore(data.entries.length === 50);
+      }
+      setUpdatedAt(Date.now());
     } catch (err) {
-      setError((err as Error).message);
+      if (generation === requestGeneration.current)
+        setError((err as Error).message);
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) setLoading(false);
     }
-  }, [session, section, query, status, api]);
+  }, [session, section, query, status, days, api]);
   useEffect(() => {
     void reload();
+    return () => {
+      requestGeneration.current++;
+    };
   }, [reload]);
   useEffect(() => {
     if (!menu) return;
@@ -186,7 +221,8 @@ export default function AdminPanel() {
     return () => document.removeEventListener("keydown", escape);
   }, [menu]);
   const more = async () => {
-    if (busy) return;
+    if (busy || loading) return;
+    const generation = requestGeneration.current;
     setBusy(true);
     setError("");
     try {
@@ -194,6 +230,7 @@ export default function AdminPanel() {
         const data = await api<{ users: User[]; next: string }>(
           `users?q=${encodeURIComponent(query)}&before=${encodeURIComponent(userNext)}`,
         );
+        if (generation !== requestGeneration.current) return;
         setUsers((rows) => [...rows, ...data.users]);
         setUserNext(data.next);
       }
@@ -201,13 +238,17 @@ export default function AdminPanel() {
         const data = await api<{ reports: Report[] }>(
           `reports?status=${status}&before=${reports.at(-1)?.id}`,
         );
+        if (generation !== requestGeneration.current) return;
         setReports((rows) => [...rows, ...data.reports]);
+        setReportsMore(data.reports.length === 50);
       }
       if (section === "audit") {
         const data = await api<{ entries: Audit[] }>(
           `audit?before=${audit.at(-1)?.id}`,
         );
+        if (generation !== requestGeneration.current) return;
         setAudit((rows) => [...rows, ...data.entries]);
+        setAuditMore(data.entries.length === 50);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -236,6 +277,7 @@ export default function AdminPanel() {
       setAction(null);
       setNotice("Action enregistrée dans le journal.");
       await reload();
+      setOverview(await api<Overview>("overview"));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -250,8 +292,20 @@ export default function AdminPanel() {
       setError((err as Error).message);
     }
   };
+  const navigate = (next: Section) => {
+    setSection(next);
+    setMenu(false);
+    setNotice("");
+    setAction(null);
+    mainContent.current?.focus();
+  };
   const roomTable = (rooms: Room[]) => (
-    <div className="admin-table-wrap" tabIndex={0} role="region" aria-label="Salons ouverts">
+    <div
+      className="admin-table-wrap"
+      tabIndex={0}
+      role="region"
+      aria-label="Liste des salons ouverts"
+    >
       <table>
         <caption className="sr">Salons ouverts</caption>
         <thead>
@@ -266,14 +320,20 @@ export default function AdminPanel() {
         <tbody>
           {rooms.map((room) => (
             <tr key={room.code}>
-              <th scope="row">{room.code}</th>
+              <th scope="row">
+                <span className="admin-room-code">{room.code}</span>
+              </th>
               <td>{gameNames[room.game] ?? room.game}</td>
               <td>
-                {room.phase === "playing"
-                  ? "En partie"
-                  : room.phase === "over"
-                    ? "Terminée"
-                    : "En attente"}
+                <span
+                  className={`admin-state ${room.phase === "playing" ? "is-playing" : ""}`}
+                >
+                  {room.phase === "playing"
+                    ? "En partie"
+                    : room.phase === "over"
+                      ? "Terminée"
+                      : "En attente"}
+                </span>
               </td>
               <td>
                 {room.online} en ligne / {room.players}
@@ -293,7 +353,10 @@ export default function AdminPanel() {
       </a>
       <aside className={`admin-side${menu ? " is-open" : ""}`}>
         <Link className="admin-brand" href="/">
-          lab.bingo <span>games</span>
+          <img src="/brand/logo.webp" alt="" width={40} height={40} />
+          <span>
+            lab.bingo <strong>games</strong>
+          </span>
         </Link>
         <button
           ref={menuButton}
@@ -306,21 +369,19 @@ export default function AdminPanel() {
         >
           ☰
         </button>
-        <p>Administration</p>
+        <p className="admin-side-label">Administration</p>
         <nav id="admin-navigation" aria-label="Administration">
           {sections.map(([id, label]) => (
             <button
               key={id}
               type="button"
               aria-current={section === id ? "page" : undefined}
-              onClick={() => {
-                setSection(id);
-                setMenu(false);
-                setNotice("");
-                setAction(null);
-              }}
+              onClick={() => navigate(id)}
             >
-              {label}
+              <span>
+                <Ic name={sectionIcons[id]} />
+                {label}
+              </span>
               {id === "reports" && !!overview?.counts.openReports && (
                 <span className="pill count">
                   {overview.counts.openReports}
@@ -329,31 +390,44 @@ export default function AdminPanel() {
             </button>
           ))}
         </nav>
+        <div className="admin-access">
+          <Ic name="lock" />
+          <div>
+            <b>Accès restreint</b>
+            <span>Administrateur Authentik</span>
+          </div>
+        </div>
         <Link className="admin-back" href="/">
+          <Ic name="leave" />
           Revenir aux jeux
         </Link>
       </aside>
       <div className="admin-main">
         <header className="admin-header">
-          <span>
-            <Ic name="lock" />
-            {session
-              ? `${session.username} · Authentik`
-              : "Vérification de l’accès…"}
+          <span className="admin-location">
+            Games <span>/</span> Administration
           </span>
-          {session && (
-            <button className="btn quiet small" onClick={logout}>
-              Se déconnecter
-            </button>
-          )}
+          <div className="admin-account">
+            <span>
+              <Ic name="lock" />
+              {session
+                ? `${session.username} · Authentik`
+                : "Vérification de l’accès…"}
+            </span>
+            {session && (
+              <button className="btn quiet small" onClick={logout}>
+                Se déconnecter
+              </button>
+            )}
+          </div>
         </header>
-        <main id="admin-content" tabIndex={-1}>
+        <main id="admin-content" ref={mainContent} tabIndex={-1}>
           <div className="admin-heading">
             <div>
               <h1>{sections.find(([id]) => id === section)?.[1]}</h1>
               <p>
                 {section === "overview"
-                  ? "Gardez un œil sur les parties et les situations à examiner."
+                  ? "L’activité de Games, des premières inscriptions aux salons en cours."
                   : section === "rooms"
                     ? "Les salons ouverts, sans messages privés ni secrets de partie."
                     : section === "users"
@@ -363,15 +437,45 @@ export default function AdminPanel() {
                         : "Les actions administrateur, avec leur motif."}
               </p>
             </div>
-            <button
-              className="btn quiet small"
-              disabled={!session || loading}
-              onClick={() => void reload()}
-            >
-              <Ic name="again" />
-              Actualiser
-            </button>
+            <div className="admin-toolbar">
+              {section === "overview" && (
+                <div className="admin-period">
+                  <label htmlFor="admin-period-select">Période</label>
+                  <select
+                    id="admin-period-select"
+                    value={days}
+                    disabled={loading}
+                    onChange={(event) => setDays(Number(event.target.value))}
+                  >
+                    <option value={7}>7 jours</option>
+                    <option value={30}>30 jours</option>
+                    <option value={90}>90 jours</option>
+                  </select>
+                </div>
+              )}
+              <button
+                className="btn quiet small"
+                disabled={!session || loading || busy}
+                onClick={() => void reload()}
+              >
+                <Ic name="again" />
+                Actualiser
+              </button>
+            </div>
           </div>
+          {updatedAt > 0 && (
+            <p className="admin-updated">
+              Dernier chargement à{" "}
+              {new Date(updatedAt).toLocaleTimeString("fr-FR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+              {error
+                ? " · données précédentes, actualisation en échec"
+                : " · actualisation manuelle"}
+            </p>
+          )}
           {error && (
             <p className="notice" role="alert">
               {error}
@@ -384,54 +488,13 @@ export default function AdminPanel() {
           {loading && <p role="status">Chargement…</p>}
           {session && (
             <>
-              {section === "overview" && overview && (
-                <>
-                  <dl className="admin-summary">
-                    <div>
-                      <dt>Salons ouverts</dt>
-                      <dd>{overview.rooms.length}</dd>
-                    </div>
-                    <div>
-                      <dt>Joueurs en ligne dans les salons</dt>
-                      <dd>
-                        {overview.rooms.reduce(
-                          (sum, room) => sum + room.online,
-                          0,
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Comptes joueurs</dt>
-                      <dd>{overview.counts.users}</dd>
-                    </div>
-                  </dl>
-                  <section className="admin-priority">
-                    <div>
-                      <h2>
-                        {overview.counts.openReports
-                          ? `${overview.counts.openReports} signalement${overview.counts.openReports > 1 ? "s" : ""} à examiner`
-                          : "Aucun signalement en attente"}
-                      </h2>
-                      <p>
-                        {overview.counts.openReports
-                          ? "Consultez le contexte et consignez votre décision."
-                          : "Les nouveaux signalements apparaîtront ici."}
-                      </p>
-                    </div>
-                    <button
-                      className="btn primary"
-                      onClick={() => setSection("reports")}
-                    >
-                      Voir les signalements
-                    </button>
-                  </section>
-                  <h2>Salons ouverts</h2>
-                  {overview.rooms.length ? (
-                    roomTable(overview.rooms.slice(0, 8))
-                  ) : (
-                    <p>Aucun salon ouvert pour l’instant.</p>
-                  )}
-                </>
+              {section === "overview" && overview && analytics && (
+                <AdminDashboard
+                  data={analytics}
+                  rooms={overview.rooms}
+                  roomTable={roomTable}
+                  navigate={navigate}
+                />
               )}
               {section === "rooms" &&
                 overview &&
@@ -485,7 +548,7 @@ export default function AdminPanel() {
                   {userNext && (
                     <button
                       className="btn quiet"
-                      disabled={busy}
+                      disabled={busy || loading}
                       onClick={() => void more()}
                     >
                       Afficher la suite
@@ -568,10 +631,10 @@ export default function AdminPanel() {
                   {!loading && !reports.length && (
                     <p>Aucun signalement dans cette liste.</p>
                   )}
-                  {reports.length > 0 && reports.length % 50 === 0 && (
+                  {reportsMore && (
                     <button
                       className="btn quiet"
-                      disabled={busy}
+                      disabled={busy || loading}
                       onClick={() => void more()}
                     >
                       Afficher la suite
@@ -608,10 +671,10 @@ export default function AdminPanel() {
                   {!loading && !audit.length && (
                     <p>Aucune action administrateur enregistrée.</p>
                   )}
-                  {audit.length > 0 && audit.length % 50 === 0 && (
+                  {auditMore && (
                     <button
                       className="btn quiet"
-                      disabled={busy}
+                      disabled={busy || loading}
                       onClick={() => void more()}
                     >
                       Afficher la suite

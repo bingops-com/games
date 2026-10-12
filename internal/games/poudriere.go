@@ -117,6 +117,7 @@ type poudriere struct {
 	// shrinkAfter is when the grid starts closing in.
 	shrinkAfter time.Duration
 	rng         *rand.Rand
+	arena       string
 	grid        []byte
 	hidden      map[int]byte // bonus under a crate: 'b' bomb, 'r' reach, 's' speed
 	ups         map[int]byte // bonus lying on the floor
@@ -139,39 +140,12 @@ func newPoudriere(n int, rng *rand.Rand, now time.Time) Game {
 
 func newPoudriereWith(n int, rng *rand.Rand, now time.Time, o Options) Game {
 	g := &poudriere{shrinkAfter: o.seconds("shrink", pdShrinkAfter), rng: rng, grid: make([]byte, pdW*pdH), hidden: map[int]byte{}, ups: map[int]byte{}, start: now.Add(pdCountdown), last: now.Add(pdCountdown)}
-	corners := []int{0, pdW*pdH - 1, pdW - 1, pdW * (pdH - 1)}
-	free := map[int]bool{}
-	for _, c := range corners[:n] {
-		x, y := pdXY(c)
-		dx, dy := 1, 1
-		if x > 0 {
-			dx = -1
-		}
-		if y > 0 {
-			dy = -1
-		}
-		// Each player starts with room to lay a bomb and step aside.
-		for _, cell := range []int{c, c + dx, c + dy*pdW} {
-			free[cell] = true
-		}
+	for _, c := range pdCorners[:n] {
 		p := &pdPlayer{alive: true, bombs: 1, reach: 2, step: pdStep}
 		p.put(c)
 		g.players = append(g.players, p)
 	}
-	for cell := range g.grid {
-		x, y := pdXY(cell)
-		switch {
-		case x%2 == 1 && y%2 == 1:
-			g.grid[cell] = pdPillar
-		case !free[cell] && rng.Float64() < 0.72:
-			g.grid[cell] = pdCrate
-			if r := rng.Float64(); r < 0.34 {
-				g.hidden[cell] = pdBonuses[rng.IntN(len(pdBonuses))]
-			}
-		default:
-			g.grid[cell] = pdEmpty
-		}
-	}
+	g.buildArena(pdArenas[rng.IntN(len(pdArenas))])
 	// The order in which the grid closes: a spiral from the top left corner.
 	x0, y0, x1, y1 := 0, 0, pdW-1, pdH-1
 	for x0 <= x1 && y0 <= y1 {
@@ -544,6 +518,7 @@ type pdBlast struct {
 var pdFaces = map[int]string{-pdW: "u", pdW: "d", -1: "l", 1: "r", 0: "d"}
 
 type pdView struct {
+	Arena   string         `json:"arena"`
 	W       int            `json:"w"`
 	H       int            `json:"h"`
 	Grid    string         `json:"grid"`
@@ -561,7 +536,7 @@ type pdView struct {
 }
 
 func (g *poudriere) View(seat int, now time.Time) any {
-	v := pdView{W: pdW, H: pdH, Grid: string(g.grid), Ups: []pdItem{}, Bombs: []pdBombView{}, Blasts: []pdBlast{},
+	v := pdView{Arena: g.arena, W: pdW, H: pdH, Grid: string(g.grid), Ups: []pdItem{}, Bombs: []pdBombView{}, Blasts: []pdBlast{},
 		StartAt: ms(g.start), ShrinkAt: ms(g.start.Add(g.shrinkAfter)), Closed: g.closed, Over: g.over, Winner: -1}
 	for cell, k := range g.ups {
 		v.Ups = append(v.Ups, pdItem{C: cell, K: string(k)})

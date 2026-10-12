@@ -46,50 +46,131 @@ try {
     "OIDC credentials in browser storage",
   );
   mkdirSync("/tmp/games-admin-preview", { recursive: true });
-  for (const width of [320, 1366]) {
-    await page.setViewportSize({ width, height: 900 });
-    for (const name of [
-      "Vue d’ensemble",
-      "Salons",
-      "Joueurs",
-      "Signalements",
-      "Journal",
+  const realStats = await (
+    await context.request.get(base + "/api/admin/analytics?days=30")
+  ).json();
+  check(
+    realStats.participations === 4 &&
+      realStats.activeAccounts === 1 &&
+      realStats.newUsers === 1,
+    "fixture game statistics not read from PostgreSQL",
+  );
+  for (const days of [7, 90, 30]) {
+    await page
+      .getByLabel("Période", { exact: true })
+      .selectOption(String(days));
+    await page
+      .getByText("Chargement…", { exact: true })
+      .waitFor({ state: "hidden" });
+    await page
+      .getByText(`Par jour, sur ${days} jours · dates UTC`, { exact: true })
+      .waitFor();
+    const slider = page.getByRole("slider", { name: "Explorer les jours" });
+    await slider.focus();
+    await page.keyboard.press("Home");
+    check(
+      (await slider.inputValue()) === "0",
+      "chart cannot be explored with keyboard",
+    );
+    await page.keyboard.press("End");
+    check(
+      (await slider.inputValue()) === String(days - 1),
+      "chart last day unreachable",
+    );
+  }
+  await page.getByRole("button", { name: "Signalements", exact: true }).click();
+  check(
+    (await page
+      .getByRole("img", { name: /Signalements reçus sur 30 jours/ })
+      .count()) === 1,
+    "chart metric not switched",
+  );
+  await page.getByRole("button", { name: "Inscriptions", exact: true }).click();
+  await page
+    .getByText("Voir les données du graphique", { exact: true })
+    .click();
+  check(
+    (await page
+      .getByRole("region", { name: "Données quotidiennes" })
+      .locator("tbody tr")
+      .count()) === 30,
+    "chart data table incomplete",
+  );
+  await page
+    .getByText("Voir les données du graphique", { exact: true })
+    .click();
+  await page.route("**/api/admin/analytics?*", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Synthetic analytics outage" }),
+    }),
+  );
+  await page.getByRole("button", { name: "Actualiser", exact: true }).click();
+  await page
+    .getByRole("alert")
+    .getByText("Synthetic analytics outage", { exact: true })
+    .waitFor();
+  await page.getByText(/données précédentes, actualisation en échec/).waitFor();
+  await page.unroute("**/api/admin/analytics?*");
+  await page.getByRole("button", { name: "Actualiser", exact: true }).click();
+  await page
+    .getByText("Chargement…", { exact: true })
+    .waitFor({ state: "hidden" });
+  for (const colorScheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme });
+    for (const [width, height] of [
+      [320, 700],
+      [390, 844],
+      [844, 390],
+      [1280, 620],
+      [1366, 900],
     ]) {
-      const toggle = page.locator(".admin-menu");
-      if (
-        (await toggle.isVisible()) &&
-        (await toggle.getAttribute("aria-expanded")) === "false"
-      )
-        await toggle.click();
-      await page
-        .locator("#admin-navigation")
-        .getByRole("button", { name: new RegExp("^" + name) })
-        .click();
-      await page.getByRole("heading", { name, exact: true }).waitFor();
-      await page
-        .getByText("Chargement…", { exact: true })
-        .waitFor({ state: "hidden" });
-      await page.addScriptTag({ content: axe.source });
-      const issues = await page.evaluate(async () =>
-        (await axe.run()).violations.map((v) => ({
-          id: v.id,
-          targets: v.nodes.map((n) => n.target),
-        })),
-      );
-      check(
-        !issues.length,
-        `admin ${name} ${width}: ${JSON.stringify(issues)}`,
-      );
-      check(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth + 1,
-        ),
-        `admin overflow ${name} ${width}`,
-      );
-      if (name === "Vue d’ensemble")
-        await page.screenshot({
-          path: `/tmp/games-admin-preview/overview-${width}.png`,
-        });
+      await page.setViewportSize({ width, height });
+      for (const name of [
+        "Vue d’ensemble",
+        "Salons",
+        "Joueurs",
+        "Signalements",
+        "Journal",
+      ]) {
+        const toggle = page.locator(".admin-menu");
+        if (
+          (await toggle.isVisible()) &&
+          (await toggle.getAttribute("aria-expanded")) === "false"
+        )
+          await toggle.click();
+        await page
+          .locator("#admin-navigation")
+          .getByRole("button", { name: new RegExp("^" + name) })
+          .click();
+        await page.getByRole("heading", { name, exact: true }).waitFor();
+        await page
+          .getByText("Chargement…", { exact: true })
+          .waitFor({ state: "hidden" });
+        await page.addScriptTag({ content: axe.source });
+        const issues = await page.evaluate(async () =>
+          (await axe.run()).violations.map((v) => ({
+            id: v.id,
+            targets: v.nodes.map((n) => n.target),
+          })),
+        );
+        check(
+          !issues.length,
+          `admin ${name} ${width}: ${JSON.stringify(issues)}`,
+        );
+        check(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+          `admin overflow ${name} ${width}`,
+        );
+        if (name === "Vue d’ensemble")
+          await page.screenshot({
+            path: `/tmp/games-admin-preview/overview-${colorScheme}-${width}.png`,
+            fullPage: true,
+          });
+      }
     }
   }
   await page
@@ -142,7 +223,7 @@ try {
     "admin session survived logout",
   );
   console.log(
-    "Admin: real PKCE login, 10 accessible page states, report moderation, audited revocation and logout passed",
+    "Admin: real PKCE login, PostgreSQL charts, 7/30/90 days, keyboard exploration, outage handling, 50 accessible states, moderation, audited revocation and logout passed",
   );
 } finally {
   await browser.close();

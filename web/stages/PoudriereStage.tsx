@@ -5,6 +5,7 @@ import { play } from '@/lib/sound';
 import { memo, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
+import { BombermatArenaArt, type BombermatArena } from '@/lib/art';
 import type { T } from '@/lib/i18n';
 import { avatarAt, nameAt, useNow, type StageProps } from '@/lib/table';
 import Guide from './Guide';
@@ -26,6 +27,7 @@ interface PlayerView {
 }
 
 interface View {
+  arena: BombermatArena;
   w: number;
   h: number;
   grid: string;
@@ -368,9 +370,20 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
   }
 
   return (
-    <div className="pd">
+    <div className="pd" data-arena={v.arena ?? 'classic'}>
       {guide}
       <div className="pd-hud">
+        <div className="pd-location"><span className="pd-map">{t('Arène', 'Arena')} : {({
+          classic: t('Classique', 'Classic'),
+          crossroads: t('Carrefour', 'Crossroads'),
+          bastions: t('Bastions', 'Bastions'),
+          rings: t('Anneaux', 'Rings'),
+        })[v.arena] ?? t('Classique', 'Classic')}</span><small className="pd-setting">{({
+          classic: t('Cale du navire', 'Ship’s hold'),
+          crossroads: t('Port', 'Harbour'),
+          bastions: t('Forteresse', 'Fortress'),
+          rings: t('Atoll', 'Atoll'),
+        })[v.arena] ?? t('Cale du navire', 'Ship’s hold')}</small></div>
         {mine?.alive && (
           <ul className="pd-stats" aria-label={t('Vos bonus', 'Your bonuses')}>
             <li title={t(`${mine.bombs} bombe${mine.bombs > 1 ? 's' : ''} à la fois`, `${mine.bombs} bomb${mine.bombs === 1 ? '' : 's'} at a time`)}><span className="pd-chip"><Bonus k="b" /></span><b key={mine.bombs}>{mine.bombs}</b><span className="sr">{t('bombes à la fois', 'bombs at a time')}</span></li>
@@ -385,6 +398,9 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
         {!v.over && ready <= 0 && <span className="pd-clock">{wait > 0 ? t(`La grille se referme dans ${clock}`, `The grid closes in ${clock}`) : t('La grille se referme', 'The grid is closing in')}</span>}
       </div>
       <div className="pd-fit">
+
+      <div className="pd-arena">
+      <BombermatArenaArt arena={v.arena ?? 'classic'} />
       <div className={`pd-grid${v.blasts.length > 0 ? ' shake' : ''}`} style={{ aspectRatio: `${v.w} / ${v.h}`, ['--cw' as string]: `${100 / v.w}%`, ['--ch' as string]: `${100 / v.h}%` }}>
         <Walls grid={v.grid} w={v.w} h={v.h} />
         {v.ups.map((u) => <span key={`u${u.c}${u.k}`} className={u.k === 'x' ? 'pd-up skull' : 'pd-up'} style={at(u.c)} title={upName(u.k, t)}><Bonus k={u.k} /></span>)}
@@ -417,12 +433,13 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
         {ready > 0 && !v.over && <strong className="pd-count" aria-hidden="true" key={ready}>{ready}</strong>}
       </div>
       </div>
+      </div>
       <ul className="pd-legend">
         {v.players.map((p, seat) => (
           <li key={seat} className={`seat-${seat}${p.alive ? '' : ' out'}`}>
             <Avatar code={avatarAt(st, seat)} name={nameAt(st, seat)} />
             <svg className="swatch" viewBox="18 32 12 12" aria-hidden="true"><Emblem seat={seat} /></svg>
-            {nameAt(st, seat)}{seat === me && t(' (vous)', ' (you)')}{!p.alive && t(', éliminé', ', out')}
+            <span className="pd-legend-name" title={nameAt(st, seat)}>{nameAt(st, seat)}{seat === me && t(' (vous)', ' (you)')}{!p.alive && t(', éliminé', ', out')}</span>
           </li>
         ))}
       </ul>
