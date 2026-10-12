@@ -8,14 +8,14 @@ helm lint "$chart_root"
 helm template check "$chart_root" > "$check_dir/render.yaml"
 helm lint "$chart_root" -f "$chart_root/tests/production.yaml"
 helm template check "$chart_root" -f "$chart_root/tests/production.yaml" > "$check_dir/render.yaml"
-rg -q 'type: Recreate' "$check_dir/render.yaml"
-rg -q 'kind: NetworkPolicy' "$check_dir/render.yaml"
-rg -q 'kind: ScheduledBackup' "$check_dir/render.yaml"
-rg -q 'automountServiceAccountToken: false' "$check_dir/render.yaml"
-rg -q 'readOnlyRootFilesystem: true' "$check_dir/render.yaml"
-rg -q 'name: GAMES_PRODUCTION' "$check_dir/render.yaml"
-rg -A3 'livenessProbe:' "$check_dir/render.yaml" | rg -q 'path: /livez'
-rg -A3 'readinessProbe:' "$check_dir/render.yaml" | rg -q 'path: /healthz'
+grep -E -q 'type: Recreate' "$check_dir/render.yaml"
+grep -E -q 'kind: NetworkPolicy' "$check_dir/render.yaml"
+grep -E -q 'kind: ScheduledBackup' "$check_dir/render.yaml"
+grep -E -q 'automountServiceAccountToken: false' "$check_dir/render.yaml"
+grep -E -q 'readOnlyRootFilesystem: true' "$check_dir/render.yaml"
+grep -E -q 'name: GAMES_PRODUCTION' "$check_dir/render.yaml"
+grep -E -A3 'livenessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /livez'
+grep -E -A3 'readinessProbe:' "$check_dir/render.yaml" | grep -E -q 'path: /healthz'
 reject() {
   local label="$1"
   shift
@@ -47,10 +47,10 @@ if helm template check "$chart_root" --set ingress.enabled=true --set-string ing
 fi
 helm template check "$chart_root" -f "$chart_root/tests/production.yaml" --set-string image.digest=sha256:0000000000000000000000000000000000000000000000000000000000000000 --set-string image.tag=latest > /dev/null
 helm template restore-check "$chart_root" -f "$chart_root/tests/production.yaml" --set database.cnpg.recovery.enabled=true --set-string database.cnpg.recovery.serverName=games-postgresql-g0 --set-string database.cnpg.recovery.targetTime=2026-10-01T00:00:00Z > "$check_dir/render.yaml"
-rg -q 'source: games-recovery' "$check_dir/render.yaml"
-rg -q 'owner: games' "$check_dir/render.yaml"
-rg -q 'targetTime: "2026-10-01T00:00:00Z"' "$check_dir/render.yaml"
-if rg -q 'initdb:' "$check_dir/render.yaml"; then
+grep -E -q 'source: games-recovery' "$check_dir/render.yaml"
+grep -E -q 'owner: games' "$check_dir/render.yaml"
+grep -E -q 'targetTime: "2026-10-01T00:00:00Z"' "$check_dir/render.yaml"
+if grep -E -q 'initdb:' "$check_dir/render.yaml"; then
   printf 'FAIL: restore rendered an empty database bootstrap\n' >&2
   exit 1
 fi
