@@ -33,11 +33,7 @@ export interface Account {
   // Ce que les parties du jour ont rapporté, sur le plafond d'une journée.
   earnedToday: number;
   dailyCap: number;
-  // L'adresse par laquelle récupérer un mot de passe perdu, et les joueurs bloqués.
-  email: string;
-  // L'adresse a été confirmée par le lien qu'on y a envoyé : elle peut servir à récupérer
-  // le compte.
-  emailChecked: boolean;
+  recoveryCodesRemaining: number;
   blocked: string[];
 }
 
@@ -105,6 +101,7 @@ interface State {
   muted: string[];
   table: Table | null;
   modal: Modal;
+  recoveryCodes: string[] | null;
   // Les sons du jeu, que le joueur peut couper.
   sound: boolean;
   // Pleine fenêtre : la partie occupe toute la fenêtre, sans la bande de gauche.
@@ -119,7 +116,7 @@ const GUEST_KEY = 'games.guest';
 export const CODE_LENGTH = 8;
 export const NAME_MAX = 16;
 
-const initial: State = { ready: false, lang: 'fr', account: null, name: '', guest: '', avatar: '', guestAvatar: '', objectives: [], pals: [], invites: [], friends: null, asks: [], muted: [], table: null, modal: null, sound: true, full: false, toasts: [] };
+const initial: State = { ready: false, lang: 'fr', account: null, name: '', guest: '', avatar: '', guestAvatar: '', objectives: [], pals: [], invites: [], friends: null, asks: [], muted: [], table: null, modal: null, recoveryCodes: null, sound: true, full: false, toasts: [] };
 let state = initial;
 const listeners = new Set<() => void>();
 let toastId = 0;
@@ -215,6 +212,7 @@ function guestAvatar() {
 function setAccount(account: Account | null, guestList?: Objective[]) {
   // Sans compte, les objectifs restent affichés, remis à zéro.
   const objectives = account?.objectives ?? guestList ?? state.objectives.map((o) => ({ ...o, have: 0, done: false }));
+  if (!account || (state.account && state.account.name !== account.name)) set({ recoveryCodes: null });
   set({ account, name: account?.name ?? state.guest, avatar: account?.avatar || state.guestAvatar, objectives });
 }
 
@@ -318,25 +316,18 @@ export const App = {
     if (state.account) set({ account: { ...state.account, blocked: out.blocked } });
     void App.loadPals();
   },
-  async setEmail(email: string, password: string) {
-    const out = await App.api<{ email: string; emailChecked: boolean }>('/api/account/email', { email, password });
-    if (state.account) set({ account: { ...state.account, email: out.email, emailChecked: out.emailChecked } });
-    return out;
-  },
-  // Renvoie le lien qui confirme l'adresse du compte.
-  async resendCheck() {
-    await App.api('/api/account/email/check', {});
-  },
-  // Le lien reçu par e-mail confirme l'adresse, connecté ou non.
-  async confirmEmail(token: string) {
-    const out = await App.api<{ email: string }>('/api/confirm', { token });
-    if (state.account?.email.toLowerCase() === out.email.toLowerCase()) set({ account: { ...state.account, emailChecked: true } });
-    return out.email;
-  },
-  // Un nouveau mot de passe choisi depuis le lien reçu par e-mail : il connecte.
-  async reset(token: string, password: string) {
-    const { user } = await App.api<{ user: Account }>('/api/reset', { token, password });
+  async regenerateRecoveryCodes(password: string) {
+    const { user, recoveryCodes } = await App.api<{ user: Account; recoveryCodes: string[] }>('/api/account/recovery-codes', { password });
     setAccount(user);
+    set({ recoveryCodes });
+  },
+  dismissRecoveryCodes() {
+    set({ recoveryCodes: null });
+  },
+  async recover(name: string, code: string, password: string) {
+    const { user } = await App.api<{ user: Account }>('/api/reset', { name, code, password });
+    setAccount(user);
+    set({ modal: null, recoveryCodes: null });
   },
   // Achète un article du magasin du jour.
   async buy(item: string) {
@@ -362,12 +353,12 @@ export const App = {
     }
     set({ guestAvatar: code, avatar: code });
   },
-  async sign(kind: 'login' | 'register', name: string, password: string, email?: string) {
-    const { user } = await App.api<{ user: Account }>(`/api/${kind}`, kind === 'register' ? { name, password, email } : { name, password });
+  async sign(kind: 'login' | 'register', name: string, password: string) {
+    const { user, recoveryCodes } = await App.api<{ user: Account; recoveryCodes?: string[] }>(`/api/${kind}`, { name, password });
     setAccount(user);
-    set({ modal: null });
+    set({ modal: null, recoveryCodes: recoveryCodes ?? null });
     await App.adopt();
-    App.toast(kind === 'register' ? tr('Compte créé. Un lien part à votre adresse pour la confirmer.', 'Account created. A link is on its way to your address to confirm it.') : tr('Connecté', 'Signed in'));
+    App.toast(kind === 'register' ? tr('Compte créé. Enregistrez vos codes de récupération.', 'Account created. Save your recovery codes.') : tr('Connecté', 'Signed in'));
   },
   async signOut() {
     await App.api('/api/logout', {}).catch(() => null);

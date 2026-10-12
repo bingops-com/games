@@ -22,7 +22,6 @@ var (
 	ErrTooMany   = errors.New("store: too many pending invitations")
 	ErrOwned     = errors.New("store: already owned")
 	ErrTooPoor   = errors.New("store: not enough credits")
-	ErrEmailUsed = errors.New("store: address already used")
 )
 
 // MaxPending is how many invitations an account may have waiting for an
@@ -148,6 +147,14 @@ CREATE TABLE email_checks (
 	email      TEXT NOT NULL,
 	expires_at BIGINT NOT NULL
 );
+`, `
+-- Recovery codes replace email-based recovery. Legacy columns/tables are kept
+-- for data preservation, but the application no longer reads or accepts them.
+CREATE TABLE recovery_codes (
+    user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    PRIMARY KEY (user_id, token_hash)
+);
 `}
 
 // Held while the schema is upgraded, so that two instances starting together
@@ -225,10 +232,8 @@ type User struct {
 	// their name wears, or empty.
 	Credits int
 	Fx      string
-	// Email is where a link to choose a new password may be sent, or empty;
-	// EmailChecked says its owner opened the link sent to it.
-	Email        string
-	EmailChecked bool
+	// Only the count is exposed; plaintext codes are never stored.
+	RecoveryCodesRemaining int
 	// EarnedToday is how many credits today's games have paid so far.
 	EarnedToday int
 }
@@ -244,21 +249,29 @@ func newID() string {
 // Names are unique whatever their case: "Bing" and "bing" are one player.
 func nameKey(name string) string { return strings.ToLower(name) }
 
-func (s *Store) CreateUser(ctx context.Context, name, password, email string) (*User, error) {
-	u := &User{ID: newID(), Name: name, Since: now(), Email: email}
-	_, err := s.db.ExecContext(ctx, "INSERT INTO users (id, name, name_key, password, email, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-		u.ID, name, nameKey(name), password, email, u.Since)
+// CreateUser stores the account and its initial recovery hashes atomically.
+// A nil set is only used to reconstruct legacy accounts without codes.
+func (s *Store) CreateUser(ctx context.Context, name, password string, hashes []string) (*User, error) {
+	u := &User{ID: newID(), Name: name, Since: now(), RecoveryCodesRemaining: len(hashes)}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, "INSERT INTO users (id, name, name_key, password, created_at) VALUES ($1, $2, $3, $4, $5)", u.ID, name, nameKey(name), password, u.Since)
 	if err != nil {
 		var pg *pgconn.PgError
 		if errors.As(err, &pg) && pg.Code == "23505" {
-			if pg.ConstraintName == "users_email" {
-				return nil, ErrEmailUsed
-			}
 			return nil, ErrNameTaken
 		}
 		return nil, err
 	}
-	return u, nil
+	if hashes != nil {
+		if err := insertRecoveryCodes(ctx, tx, u.ID, hashes); err != nil {
+			return nil, err
+		}
+	}
+	return u, tx.Commit()
 }
 
 // Credentials returns the id and the password hash of an account.
@@ -272,7 +285,7 @@ func (s *Store) Credentials(ctx context.Context, name string) (id, password stri
 
 func (s *Store) user(ctx context.Context, where string, args ...any) (*User, error) {
 	u := &User{}
-	err := s.db.QueryRowContext(ctx, "SELECT u.id, u.name, u.created_at, u.avatar, u.credits, u.name_fx, u.email, u.email_checked, CASE WHEN u.credits_day = $"+fmt.Sprint(len(args)+1)+" THEN u.credits_today ELSE 0 END FROM users u "+where, append(args, today())...).Scan(&u.ID, &u.Name, &u.Since, &u.Avatar, &u.Credits, &u.Fx, &u.Email, &u.EmailChecked, &u.EarnedToday)
+	err := s.db.QueryRowContext(ctx, "SELECT u.id, u.name, u.created_at, u.avatar, u.credits, u.name_fx, (SELECT COUNT(*) FROM recovery_codes c WHERE c.user_id = u.id), CASE WHEN u.credits_day = $"+fmt.Sprint(len(args)+1)+" THEN u.credits_today ELSE 0 END FROM users u "+where, append(args, today())...).Scan(&u.ID, &u.Name, &u.Since, &u.Avatar, &u.Credits, &u.Fx, &u.RecoveryCodesRemaining, &u.EarnedToday)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -295,98 +308,6 @@ func (s *Store) UserBySession(ctx context.Context, tokenHash string) (*User, err
 func (s *Store) SetAvatar(ctx context.Context, userID, avatar string) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE users SET avatar = $1 WHERE id = $2", avatar, userID)
 	return err
-}
-
-// SetEmail saves the address of an account. Another address is one its owner
-// has not confirmed yet.
-func (s *Store) SetEmail(ctx context.Context, userID, email, passwordHash string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	// Updating the account locks it before touching tokens, just like reset.
-	res, err := tx.ExecContext(ctx, "UPDATE users SET email_checked = email_checked AND lower(email) = lower($1), email = $1 WHERE id = $2 AND password = $3", email, userID, passwordHash)
-	var pg *pgconn.PgError
-	if errors.As(err, &pg) && pg.Code == "23505" {
-		return ErrEmailUsed
-	}
-	if err != nil {
-		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n != 1 {
-		return ErrNotFound
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE user_id = $1", userID); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM email_checks WHERE user_id = $1", userID); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func (s *Store) UserByEmail(ctx context.Context, email string) (*User, error) {
-	return s.user(ctx, "WHERE u.email <> '' AND lower(u.email) = lower($1)", email)
-}
-
-// CreateCheck remembers a link to confirm an address; an account has one at a
-// time.
-func (s *Store) CreateCheck(ctx context.Context, userID, email, tokenHash string, expires time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	var current string
-	if err := tx.QueryRowContext(ctx, "SELECT email FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&current); err != nil {
-		return err
-	}
-	if !strings.EqualFold(current, email) {
-		return ErrNotFound
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM email_checks WHERE user_id = $1 OR expires_at < $2", userID, now()); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO email_checks (token_hash, user_id, email, expires_at) VALUES ($1, $2, $3, $4)", tokenHash, userID, email, expires.UnixMilli()); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// ConfirmEmail marks the address a link was sent to as confirmed, if the
-// account still has it, and returns the address.
-func (s *Store) ConfirmEmail(ctx context.Context, tokenHash string) (string, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-	var id, current, email string
-	if err := tx.QueryRowContext(ctx, "SELECT user_id FROM email_checks WHERE token_hash = $1", tokenHash).Scan(&id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrNotFound
-		}
-		return "", err
-	}
-	if err := tx.QueryRowContext(ctx, "SELECT email FROM users WHERE id = $1 FOR UPDATE", id).Scan(&current); err != nil {
-		return "", err
-	}
-	if err := tx.QueryRowContext(ctx, "DELETE FROM email_checks WHERE token_hash = $1 AND expires_at > $2 RETURNING email", tokenHash, now()).Scan(&email); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrNotFound
-		}
-		return "", err
-	}
-	if !strings.EqualFold(current, email) {
-		return "", ErrNotFound
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE users SET email_checked = TRUE WHERE id = $1", id); err != nil {
-		return "", err
-	}
-	return current, tx.Commit()
 }
 
 // SetPassword changes the password of an account and closes every session
@@ -413,81 +334,6 @@ func (s *Store) SetPassword(ctx context.Context, userID, password, keep, passwor
 		return err
 	}
 	return tx.Commit()
-}
-
-// CreateReset preserves earlier unexpired links: an anonymous request must
-// not invalidate the link its owner is already using. A successful reset
-// consumes every outstanding link for that account.
-func (s *Store) CreateReset(ctx context.Context, userID, email, tokenHash string, expires time.Time) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	// Mail is asynchronous: the address may have changed since it was read.
-	var current string
-	var checked bool
-	if err := tx.QueryRowContext(ctx, "SELECT email, email_checked FROM users WHERE id = $1 FOR UPDATE", userID).Scan(&current, &checked); err != nil {
-		return err
-	}
-	if current == "" || !checked || !strings.EqualFold(current, email) {
-		return ErrNotFound
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE expires_at < $1", now()); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, "INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, $3)", tokenHash, userID, expires.UnixMilli()); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// ResetUser is a cheap precheck, not authorization to update a password.
-// ResetPassword revalidates and consumes the token atomically.
-func (s *Store) ResetUser(ctx context.Context, tokenHash string) (string, error) {
-	var id string
-	err := s.db.QueryRowContext(ctx, "SELECT user_id FROM password_resets WHERE token_hash = $1 AND expires_at > $2", tokenHash, now()).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		err = ErrNotFound
-	}
-	return id, err
-}
-
-// ResetPassword consumes a link, changes the password and revokes sessions in
-// one transaction. Account-first locking also serializes email changes and
-// new links without deadlocking concurrent resets.
-func (s *Store) ResetPassword(ctx context.Context, tokenHash, password string) (string, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-	var id, locked string
-	if err := tx.QueryRowContext(ctx, "SELECT user_id FROM password_resets WHERE token_hash = $1", tokenHash).Scan(&id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrNotFound
-		}
-		return "", err
-	}
-	if err := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id = $1 FOR UPDATE", id).Scan(&locked); err != nil {
-		return "", err
-	}
-	if err := tx.QueryRowContext(ctx, "DELETE FROM password_resets WHERE token_hash = $1 AND expires_at > $2 RETURNING user_id", tokenHash, now()).Scan(&locked); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			err = ErrNotFound
-		}
-		return "", err
-	}
-	if _, err := tx.ExecContext(ctx, "UPDATE users SET password = $1 WHERE id = $2", password, id); err != nil {
-		return "", err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM password_resets WHERE user_id = $1", id); err != nil {
-		return "", err
-	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", id); err != nil {
-		return "", err
-	}
-	return id, tx.Commit()
 }
 
 // ---------- blocks and reports ----------

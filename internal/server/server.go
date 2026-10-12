@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bingops-com/games/internal/mail"
 	"github.com/bingops-com/games/internal/room"
 	"github.com/bingops-com/games/internal/store"
 )
@@ -31,16 +30,13 @@ const (
 )
 
 type Config struct {
-	// Production rejects incomplete mail and canonical-URL configuration.
+	// Production requires a canonical HTTPS origin and Secure cookies.
 	Production bool
 	// TrustProxy says a reverse proxy sits in front and sets X-Forwarded-For
 	// and X-Forwarded-Proto. Never set it when the server is reached directly.
 	TrustProxy bool
 	Log        *slog.Logger
-	// Mail sends recovery links. Nil disables mail without logging its content.
-	// PublicURL is canonical and never comes from a request header.
-	Mail      mail.Sender
-	PublicURL string
+	PublicURL  string
 }
 
 type Server struct {
@@ -84,7 +80,7 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 		tableLimit:     newLimiter(1.0/20, 10),   // 10 tables, then one every 20 s
 		reportLimit:    newLimiter(1.0/120, 5),   // 5 reports, then one every 2 min
 		authGlobal:     newLimiter(8, 32),        // Bound expensive password checks across addresses.
-		recoveryLimit:  newLimiter(1.0/300, 1),   // One recovery email per account every five minutes.
+		recoveryLimit:  newLimiter(1.0/30, 5),    // Recovery attempts per case-insensitive username.
 		lookupLimit:    newLimiter(2, 20),
 		socketLimit:    newLimiter(1, 12),
 		messageLimit:   newLimiter(socketRate, socketBurst),
@@ -137,12 +133,9 @@ func New(st *store.Store, web fs.FS, cfg Config) (*Server, error) {
 	api.HandleFunc("POST /api/login", s.handle(s.login))
 	api.HandleFunc("POST /api/logout", s.handle(s.logout))
 	api.HandleFunc("GET /api/me", s.handle(s.me))
-	api.HandleFunc("POST /api/account/email", s.handle(s.setEmail))
-	api.HandleFunc("POST /api/account/email/check", s.handle(s.resendCheck))
-	api.HandleFunc("POST /api/confirm", s.handle(s.confirm))
 	api.HandleFunc("POST /api/account/password", s.handle(s.setPassword))
-	api.HandleFunc("POST /api/forgot", s.handle(s.forgot))
 	api.HandleFunc("POST /api/reset", s.handle(s.reset))
+	api.HandleFunc("POST /api/account/recovery-codes", s.handle(s.regenerateRecoveryCodes))
 	api.HandleFunc("POST /api/blocks/{action}", s.handle(s.block))
 	api.HandleFunc("POST /api/report", s.handle(s.report))
 	api.HandleFunc("GET /api/rooms", s.handle(s.rooms))
@@ -366,8 +359,6 @@ var nameRule = regexp.MustCompile(`^[A-Za-z0-9_-]{3,16}$`)
 type credentials struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
-	// Email is read when registering only.
-	Email string `json:"email"`
 }
 
 // account is what a signed-in player learns about themselves.
@@ -385,13 +376,10 @@ type account struct {
 	Items   []string `json:"items"`
 	Fx      string   `json:"fx"`
 	// What today's games have paid, out of the most a day may pay.
-	EarnedToday int `json:"earnedToday"`
-	DailyCap    int `json:"dailyCap"`
-	// The address a lost password is recovered through, and who is blocked.
-	Email string `json:"email"`
-	// EmailChecked says the address was confirmed by the link sent to it.
-	EmailChecked bool     `json:"emailChecked"`
-	Blocked      []string `json:"blocked"`
+	EarnedToday            int      `json:"earnedToday"`
+	DailyCap               int      `json:"dailyCap"`
+	RecoveryCodesRemaining int      `json:"recoveryCodesRemaining"`
+	Blocked                []string `json:"blocked"`
 }
 
 func (s *Server) account(ctx context.Context, u *store.User) (map[string]any, error) {
@@ -412,7 +400,7 @@ func (s *Server) account(ctx context.Context, u *store.User) (map[string]any, er
 		return nil, err
 	}
 	return map[string]any{"user": account{Name: u.Name, Since: u.Since, Received: received, Avatar: u.Avatar, Objectives: objectiveViews(p), Streak: streak, Credits: u.Credits, Items: items, Fx: u.Fx,
-		EarnedToday: u.EarnedToday, DailyCap: store.CreditsPerDay, Email: u.Email, EmailChecked: u.EmailChecked, Blocked: blocked}}, nil
+		EarnedToday: u.EarnedToday, DailyCap: store.CreditsPerDay, RecoveryCodesRemaining: u.RecoveryCodesRemaining, Blocked: blocked}}, nil
 }
 
 func tokenHash(token string) string {
@@ -490,17 +478,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 	if len(c.Password) < 8 || len(c.Password) > 128 {
 		return nil, bad("Mot de passe : 8 caractères minimum")
 	}
-	email := strings.TrimSpace(c.Email)
-	if !validEmail(email) {
-		return nil, bad("Cette adresse e-mail n'est pas valable")
+	codes, hashes, err := newRecoveryCodes()
+	if err != nil {
+		return nil, err
 	}
 	passwordHash := hashPassword(c.Password)
-	u, err := s.store.CreateUser(r.Context(), c.Name, passwordHash, email)
+	u, err := s.store.CreateUser(r.Context(), c.Name, passwordHash, hashes)
 	if errors.Is(err, store.ErrNameTaken) {
 		return nil, httpError{http.StatusConflict, "Ce pseudo est déjà pris"}
-	}
-	if errors.Is(err, store.ErrEmailUsed) {
-		return nil, httpError{http.StatusConflict, "Cette adresse est déjà utilisée par un autre compte"}
 	}
 	if err != nil {
 		return nil, err
@@ -508,8 +493,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := s.openSession(w, r, u.ID, passwordHash); err != nil {
 		return nil, err
 	}
-	s.sendCheck(r, u)
-	return s.account(r.Context(), u)
+	return s.accountWithCodes(r.Context(), u, codes)
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) (any, error) {

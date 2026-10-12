@@ -8,6 +8,7 @@ import { Avatar } from '@/lib/avatar';
 import { Name } from '@/lib/shop';
 import AvatarEditor from './AvatarEditor';
 import Mascot from './Mascot';
+import { RecoveryCodesDialog, RecoveryForm } from './RecoveryCodes';
 import { Dialog, Ic } from './ui';
 
 const closeModal = () => App.openModal(null);
@@ -42,7 +43,7 @@ function AuthDialog() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     try {
-      await App.sign(modal, String(f.get('name')), String(f.get('password')), register ? String(f.get('email')).trim() : undefined);
+      await App.sign(modal, String(f.get('name')), String(f.get('password')));
     } catch (err) {
       App.toast((err as Error).message);
     }
@@ -52,7 +53,7 @@ function AuthDialog() {
     <Dialog key={modal} title={register ? t('Créer un compte', 'Create an account') : t('Se connecter', 'Sign in')} onClose={closeModal} onSubmit={submit}>
       <p>
         {register
-          ? t('Un pseudo, une adresse e-mail, un mot de passe, et c’est tout. Vous gardez votre avatar, vos stats et vos amis.', 'A username, an email address, a password, and that is it. You keep your avatar, your stats and your friends.')
+          ? t('Un pseudo et un mot de passe, et c’est tout. Vous gardez votre avatar, vos stats et vos amis.', 'A username and a password, and that is it. You keep your avatar, your stats and your friends.')
           : t('Retrouvez votre avatar, vos stats et vos amis.', 'Get back your avatar, your stats and your friends.')}
       </p>
       <label>
@@ -60,13 +61,6 @@ function AuthDialog() {
         <input name="name" autoComplete="username" required minLength={3} maxLength={16} pattern="[A-Za-z0-9_\-]+" aria-describedby={register ? 'name-help' : undefined} />
       </label>
       {register && <small className="help" id="name-help">{t('3 à 16 caractères : lettres, chiffres, tiret et tiret bas. Il est visible de tous.', '3 to 16 characters: letters, digits, hyphen and underscore. Everyone can see it.')}</small>}
-      {register && (
-        <label>
-          {t('Adresse e-mail', 'Email address')}
-          <input name="email" type="email" autoComplete="email" required maxLength={254} placeholder={t('vous@exemple.fr', 'you@example.com')} aria-describedby="email-help" />
-        </label>
-      )}
-      {register && <small className="help" id="email-help">{t('Elle ne sert qu’à retrouver un mot de passe perdu, et personne ne la voit.', 'It is only used to recover a lost password, and nobody sees it.')}</small>}
       <label>
         {t('Mot de passe', 'Password')}
         <input name="password" type="password" autoComplete={register ? 'new-password' : 'current-password'} required minLength={register ? 8 : 1} maxLength={128} />
@@ -80,44 +74,14 @@ function AuthDialog() {
   );
 }
 
-// Mot de passe oublié : un lien part à l'adresse du compte, s'il en a une. La réponse est la
-// même dans tous les cas, pour ne pas dire qui joue ici.
 function ForgotDialog() {
   const { modal } = useApp();
   const t = useT();
-  const [sent, setSent] = useState(false);
-  useEffect(() => {
-    if (modal !== 'forgot') setSent(false);
-  }, [modal]);
   if (modal !== 'forgot') return null;
-  const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      await App.api('/api/forgot', { name: String(new FormData(e.currentTarget).get('name')) });
-      setSent(true);
-    } catch (err) {
-      App.toast((err as Error).message);
-    }
-  };
   return (
-    <Dialog title={t('Mot de passe oublié', 'Forgotten password')} onClose={closeModal} onSubmit={submit}>
-      {sent ? (
-        <>
-          <p>{t('Si ce compte a une adresse e-mail confirmée, un lien vient d’y partir. Il marche une heure. Pensez à regarder dans les indésirables.', 'If this account has a confirmed email address, a link has just been sent to it. It works for one hour. Check your spam folder too.')}</p>
-          <p>{t('Un compte sans adresse confirmée ne peut pas être récupéré.', 'An account with no confirmed address cannot be recovered.')}</p>
-          <button type="button" className="btn primary" onClick={closeModal}>{t('Fermer', 'Close')}</button>
-        </>
-      ) : (
-        <>
-          <p>{t('Donnez votre pseudo ou l’adresse e-mail du compte : nous y envoyons un lien pour choisir un nouveau mot de passe.', 'Give your username or the account’s email address: we send it a link to choose a new password.')}</p>
-          <label>
-            {t('Pseudo ou adresse e-mail', 'Username or email address')}
-            <input name="name" autoComplete="username" required maxLength={254} />
-          </label>
-          <button className="btn primary">{t('Envoyer le lien', 'Send the link')}</button>
-          <button type="button" className="btn quiet" onClick={() => App.openModal('login')}>{t('Retour', 'Back')}</button>
-        </>
-      )}
+    <Dialog title={t('Mot de passe oublié', 'Forgotten password')} onClose={closeModal}>
+      <RecoveryForm onSuccess={closeModal} />
+      <button type="button" className="btn quiet" onClick={() => App.openModal('login')}>{t('Retour', 'Back')}</button>
     </Dialog>
   );
 }
@@ -329,7 +293,8 @@ export default function Shell({ children }: { children: ReactNode }) {
     void App.start();
   }, []);
   // Tant qu'un compte est connecté, la page relit ses amis : c'est aussi ce qui le dit en ligne.
-  const signedIn = useApp().account?.name;
+  const account = useApp().account;
+  const signedIn = account?.name;
   useEffect(() => {
     void App.loadPals();
     if (!signedIn) return;
@@ -347,7 +312,7 @@ export default function Shell({ children }: { children: ReactNode }) {
   // ne sont pas un nom de jeu sont remplacés ici.
   const path = usePathname();
   useEffect(() => {
-    const en = ({ '/amis/': 'Friends', '/objectifs/': 'Objectives', '/magasin/': 'Shop', '/compte/': 'Account', '/reinitialiser/': 'New password', '/confirmer/': 'Email address', '/u/': 'Profile', '/t/': 'Room' } as Record<string, string>)[path];
+    const en = ({ '/amis/': 'Friends', '/objectifs/': 'Objectives', '/magasin/': 'Shop', '/compte/': 'Account', '/reinitialiser/': 'New password', '/u/': 'Profile', '/t/': 'Room' } as Record<string, string>)[path];
     if (lang === 'en' && en) document.title = `${en}, lab.bingo games`;
     // La pleine fenêtre ne survit pas à un changement de page.
     App.setFull(false);
@@ -370,13 +335,17 @@ export default function Shell({ children }: { children: ReactNode }) {
           <Who />
         </aside>
         <div className="main">
-          <main id="view">{children}</main>
+          <main id="view">
+            {account?.recoveryCodesRemaining === 0 && path !== '/compte/' && <p className="notice" role="status">{t('Votre compte n’a aucun code de récupération.', 'Your account has no recovery codes.')} <Link href="/compte/">{t('Créer mes codes de secours', 'Create my recovery codes')}</Link></p>}
+            {children}
+          </main>
           <footer className="foot">{t('On joue sans compte. Avec un compte, on garde son avatar et ses stats.', 'No account needed. With one, you keep your avatar and your stats.')}</footer>
         </div>
       </div>
       <NameDialog />
       <AuthDialog />
       <ForgotDialog />
+      <RecoveryCodesDialog />
       <AvatarEditor />
       <Invites />
       <div id="toasts" role="status" aria-live="polite">

@@ -58,6 +58,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "games.validate" -}}
+{{- if .Values.mail -}}{{- fail "mail configuration is retired; account recovery uses offline codes" -}}{{- end -}}
 {{- if .Values.database.cnpg.recovery.enabled -}}
 {{- if or (not .Values.database.cnpg.enabled) (not .Values.database.cnpg.backup.enabled) -}}{{- fail "recovery requires CNPG and its backup ObjectStore configuration" -}}{{- end -}}
 {{- if empty .Values.database.cnpg.recovery.serverName -}}{{- fail "recovery.serverName must name the source archive generation" -}}{{- end -}}
@@ -70,7 +71,6 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if not (regexMatch "^https://[^/?#@]+/?$" .Values.publicUrl) -}}
 {{- fail "production requires publicUrl to be a canonical HTTPS origin" -}}
 {{- end -}}
-{{- if empty .Values.mail.relay -}}{{- fail "production requires mail.relay (SMTP with trusted STARTTLS)" -}}{{- end -}}
 {{- if and .Values.ingress.enabled (not .Values.ingress.tls.enabled) -}}{{- fail "production ingress requires TLS" -}}{{- end -}}
 {{- if and .Values.ingress.enabled (ne (trimSuffix "/" .Values.publicUrl) (printf "https://%s" .Values.ingress.host)) -}}{{- fail "publicUrl must match the HTTPS ingress host" -}}{{- end -}}
 {{- if ne .Values.service.type "ClusterIP" -}}{{- fail "production service must be ClusterIP behind the declared proxy" -}}{{- end -}}
@@ -90,6 +90,6 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if empty .Values.database.existingSecret.backupRunbook -}}{{- fail "production external database requires its owning backupRunbook" -}}{{- end -}}
 {{- if empty .Values.networkPolicy.databaseTo -}}{{- fail "external database requires explicit networkPolicy.databaseTo peers" -}}{{- end -}}
 {{- end -}}
-{{- if or (empty .Values.networkPolicy.dnsTo) (empty .Values.networkPolicy.smtpTo) -}}{{- fail "production requires explicit DNS and SMTP egress peers" -}}{{- end -}}
+{{- if empty .Values.networkPolicy.dnsTo -}}{{- fail "production requires explicit DNS egress peers" -}}{{- end -}}
 {{- end -}}
 {{- end }}

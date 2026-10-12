@@ -5,7 +5,7 @@
 //   npm run e2e -- ono amis  ceux dont le nom contient « ono » ou « amis »
 //
 // Ils créent des comptes « e2e_… » : à lancer contre une base de développement.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const BASE = process.env.GAMES_URL ?? 'http://localhost:3778';
@@ -26,7 +26,7 @@ async function player({ width = 1366, height = 768, account = '' } = {}) {
   await page.goto(BASE + '/');
   await page.getByRole('button', { name: /Créer un salon/ }).waitFor();
   if (account) {
-    const status = await page.evaluate(async (n) => (await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n, password: 'long enough', email: `${n}@e2e.test` }) })).status, account);
+    const status = await page.evaluate(async (n) => (await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n, password: 'long enough' }) })).status, account);
     check(status === 200, `inscription de ${account} : ${status}`);
     await page.reload();
     await page.locator('.who-name').waitFor();
@@ -58,19 +58,64 @@ const start = async (host) => {
 };
 
 const scenarios = {
-  // Un compte se crée avec une adresse e-mail, et pas sans.
+  // Inscription, sauvegarde des codes, récupération et rotation sur téléphone.
   async inscription() {
-    const p = await player();
+    const p = await player({ width: 390, height: 800 });
     const name = `e2e_${tag()}`;
-    const post = (body) => p.evaluate(async (b) => (await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, body);
-    check((await post({ name, password: 'long enough' })) === 400, 'un compte se crée sans adresse');
     await p.getByRole('button', { name: /Créer un compte/ }).first().click();
     const form = p.locator('.dialog');
+    check((await form.locator('input[name=email]').count()) === 0, 'adresse encore demandée');
     await form.locator('input[name=name]').fill(name);
-    await form.locator('input[name=email]').fill(`${name}@e2e.test`);
     await form.locator('input[name=password]').fill('long enough');
     await form.getByRole('button', { name: /Créer le compte/ }).click();
+    const codesDialog = p.locator('.recovery-dialog');
+    await codesDialog.waitFor();
+    const codes = await codesDialog.locator('code').allTextContents();
+    check(codes.length === 10 && new Set(codes).size === 10, 'dix codes distincts attendus');
+    check(await codesDialog.getByRole('button', { name: 'Continuer' }).isDisabled(), 'codes fermables sans confirmation');
+    await p.keyboard.press('Escape');
+    check(await codesDialog.isVisible(), 'Échap a perdu les codes avant sauvegarde');
+    check((await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, 'codes débordent sur téléphone');
+    const downloading = p.waitForEvent('download');
+    await codesDialog.getByRole('button', { name: 'Télécharger les codes' }).click();
+    const download = await downloading;
+    const content = readFileSync(await download.path(), 'utf8');
+    check(codes.every((code) => content.includes(code)) && content.includes(name), 'fichier de récupération incomplet');
+    await codesDialog.getByRole('checkbox').check();
+    await codesDialog.getByRole('button', { name: 'Continuer' }).click();
+    await codesDialog.waitFor({ state: 'detached' });
+    const storage = await p.evaluate(() => JSON.stringify([localStorage, sessionStorage]));
+    check(codes.every((code) => !storage.includes(code)), 'codes conservés dans le stockage navigateur');
+    await p.reload();
+    check((await p.locator('.recovery-dialog').count()) === 0, 'codes réaffichés après rechargement');
+    const stale = await player();
+    await stale.evaluate(async (n) => fetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: n, password: 'long enough' }) }), name);
+    await p.evaluate(() => fetch('/api/logout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }));
+    await p.reload();
+    // On a phone the header exposes registration; sign-in is its second action.
+    await p.getByRole('button', { name: 'Créer un compte', exact: true }).first().click();
+    await p.getByRole('button', { name: 'J’ai déjà un compte', exact: true }).click();
+    await p.getByRole('button', { name: 'Mot de passe oublié ?' }).click();
+    const recover = p.locator('.dialog');
+    await recover.locator('input[name=name]').fill(name);
+    await recover.locator('input[name=code]').fill(codes[0]);
+    await recover.locator('input[name=password]').fill('recovered password');
+    await recover.locator('input[name=confirm]').fill('recovered password');
+    await recover.getByRole('button', { name: 'Récupérer mon compte' }).click();
     await p.locator('.who-name', { hasText: name }).waitFor();
+    check(await stale.evaluate(async () => (await (await fetch('/api/me')).json()).user === null), 'ancienne session valide après récupération');
+    check((await stale.evaluate(async (b) => (await fetch('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, { name, code: codes[0], password: 'reused password' })) === 400, 'code réutilisable');
+    await p.goto(BASE + '/compte/');
+    await p.getByRole('status').filter({ hasText: '9 codes disponibles' }).waitFor();
+    const rotate = p.locator('section').filter({ has: p.getByRole('heading', { name: 'Codes de récupération' }) });
+    await rotate.locator('input[name=password]').fill('recovered password');
+    await rotate.getByRole('button', { name: 'Créer de nouveaux codes' }).click();
+    await codesDialog.waitFor();
+    const replacements = await codesDialog.locator('code').allTextContents();
+    check(replacements.length === 10 && replacements.every((code) => !codes.includes(code)), 'rotation n’a pas remplacé les codes');
+    await codesDialog.getByRole('checkbox').check();
+    await codesDialog.getByRole('button', { name: 'Continuer' }).click();
+    check((await stale.evaluate(async (b) => (await fetch('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status, { name, code: codes[1], password: 'old set password' })) === 400, 'ancien code valide après rotation');
   },
 
   // Quitter un salon par mégarde, puis y retourner depuis la bande.
@@ -241,7 +286,8 @@ for (const name of names) {
     console.log(`ok    ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   } catch (err) {
     failed++;
-    console.log(`ÉCHEC ${name} : ${String(err.message).split('\n')[0]}`);
+    const at = String(err.stack).split('\n').find((line) => line.includes('run.mjs:'))?.trim() ?? '';
+    console.log(`ÉCHEC ${name} : ${String(err.message).split('\n')[0]} ${at}`);
   }
   for (const c of browser.contexts().slice(before)) await c.close();
 }
