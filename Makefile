@@ -1,4 +1,4 @@
-.PHONY: db web build run dev test e2e check art chart docker
+.PHONY: db web build run dev test e2e e2e-check check art chart docker
 
 # The PostgreSQL started by "make db" (compose.yaml). Point these elsewhere to
 # use another one; the tests work in a schema of their own and drop it.
@@ -32,6 +32,9 @@ test:
 # (make run, or GAMES_URL). They create "e2e_…" accounts: for a development base.
 e2e:
 	cd web && npm run e2e
+
+e2e-check:
+	bash web/e2e/check.sh
 
 e2e-accessibility:
 	cd web && npm run e2e:accessibility

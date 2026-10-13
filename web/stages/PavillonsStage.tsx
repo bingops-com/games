@@ -1,12 +1,13 @@
 'use client';
 
 import { play } from '@/lib/sound';
-import { useEffect, useState, type FormEvent, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type CSSProperties } from 'react';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import type { T } from '@/lib/i18n';
 import { avatarAt, nameAt, type StageProps } from '@/lib/table';
 import Guide from './Guide';
+import GameAnnouncement from './GameAnnouncement';
 
 interface Clue {
   team: number;
@@ -51,10 +52,12 @@ function Teams({ st, act }: StageProps<View>) {
   const t = useT();
   const v = st.view;
   const me = st.seat;
+  const host = st.host === st.you;
+  const hostName = st.members.find((m) => m.id === st.host)?.name ?? '';
   return (
     <div className="pav-teams">
-      <Guide tone={v.ready ? 'you' : 'alert'} title={t('Formez les deux équipes', 'Make the two teams')}>
-        {t('Dans chaque équipe, un seul joueur connaît la grille et donne les indices ; les autres devinent. Changez de place avec les boutons, puis commencez.', 'In each team, a single player knows the grid and gives the clues; the others guess. Move with the buttons, then begin.')}
+      <Guide tone={v.ready ? (host ? 'you' : 'wait') : 'alert'} title={t('Formez les deux équipes', 'Make the two teams')}>
+        {t('Dans chaque équipe, un seul joueur connaît la grille et donne les indices ; les autres devinent. Choisissez votre rôle ; l’hôte commence quand les équipes sont prêtes.', 'In each team, a single player knows the grid and gives the clues; the others guess. Choose your role; the host begins when the teams are ready.')}
       </Guide>
       <div className="pav-sides">
         {[0, 1].map((team) => {
@@ -83,12 +86,14 @@ function Teams({ st, act }: StageProps<View>) {
           );
         })}
       </div>
-      {me >= 0 && (
-        <div className="pav-begin">
+      <div className="pav-begin">
+        {host && me >= 0 ? (
           <button className="btn white" disabled={!v.ready} onClick={() => act({ t: 'begin' })}>{t('Commencer la partie', 'Begin the game')}</button>
-          {!v.ready && <span>{t('Il faut dans chaque équipe un seul joueur qui donne les indices, et au moins un qui devine.', 'Each team needs a single player who gives the clues, and at least one who guesses.')}</span>}
-        </div>
-      )}
+        ) : (
+          <span>{t(`${hostName}, l’hôte, commencera la partie quand les équipes seront prêtes.`, `${hostName}, the host, will begin the game when the teams are ready.`)}</span>
+        )}
+        {!v.ready && <span>{t('Il faut dans chaque équipe un seul joueur qui donne les indices, et au moins un qui devine.', 'Each team needs a single player who gives the clues, and at least one who guesses.')}</span>}
+      </div>
     </div>
   );
 }
@@ -100,6 +105,24 @@ export default function PavillonsStage(props: StageProps<View>) {
   const me = st.seat;
   const [word, setWord] = useState('');
   const [count, setCount] = useState(1);
+  const [flash, setFlash] = useState<{ event: string; id: number } | null>(null);
+  const flashId = useRef(0);
+  const clueEvent = v.clue ? `${v.clues.length}:${v.clue.team}:${v.clue.word}:${v.clue.count}` : '';
+  const previousClue = useRef(clueEvent);
+  useEffect(() => {
+    if (clueEvent && clueEvent !== previousClue.current) {
+      setFlash({ event: clueEvent, id: ++flashId.current });
+      setWord('');
+      play('clue');
+    }
+    if (!clueEvent) setFlash(null);
+    previousClue.current = clueEvent;
+  }, [clueEvent]);
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), 3000);
+    return () => clearTimeout(timer);
+  }, [flash]);
   // Un mot retourné s'entend.
   const turned = v.last ? `${v.last.i}` : '';
   useEffect(() => {
@@ -115,7 +138,6 @@ export default function PavillonsStage(props: StageProps<View>) {
     e.preventDefault();
     if (!word.trim()) return;
     act({ t: 'clue', word: word.trim(), n: count });
-    setWord('');
   };
   const guideOf = (team: number) => nameAt(st, v.team.findIndex((x, seat) => x === team && v.guide[seat]));
   const turnTeam = teamName(v.turn, t);
@@ -159,12 +181,14 @@ export default function PavillonsStage(props: StageProps<View>) {
 
   return (
     <div className="pav">
+      <GameAnnouncement event={v.phase === 'play' ? String(v.turn) : null} initial title={t(`Au tour de ${turnTeam}`, `${turnTeam}'s turn`)} detail={t(`${guideOf(v.turn)} donne le prochain indice.`, `${guideOf(v.turn)} gives the next clue.`)} sound="turn" className={`side-${KIND[v.turn]}`} />
       {banner}
       <div className="pav-score">
         {[0, 1].map((team) => (
           <div key={team} className={`pav-team side-${KIND[team]}${v.phase === 'play' && v.turn === team ? ' turn' : ''}`}>
             <b><Mark k={team} /> {teamName(team, t)}{myTeam === team && <small>{mine}</small>}</b>
             <span>{t(`${v.remain[team]} mot${v.remain[team] > 1 ? 's' : ''} à trouver`, `${v.remain[team]} word${v.remain[team] === 1 ? '' : 's'} to find`)}</span>
+            <span className="pav-team-state">{v.phase === 'play' && v.turn === team ? t('À vous de jouer', 'Playing now') : t('En attente', 'Waiting')}{myTeam === team && t(' · Votre équipe', ' · Your team')}</span>
           </div>
         ))}
       </div>
@@ -183,6 +207,7 @@ export default function PavillonsStage(props: StageProps<View>) {
         {v.phase === 'play' && v.clue && (
           <p>
             {t(`Indice de ${turnTeam} :`, `${turnTeam}'s clue:`)} <strong className="clue-word" key={`${v.clue.word}-${v.clues.length}`}>{v.clue.word} <b>{v.clue.count}</b></strong>
+            <button type="button" className="btn onsea small" onClick={() => setFlash({ event: clueEvent, id: ++flashId.current })}>{t('Revoir l’indice', 'Show clue again')}</button>
             <span>{v.clue.count === 0 ? t('Autant de mots que vous voulez.', 'As many words as you like.') : t(`Encore ${v.left} mot${v.left > 1 ? 's' : ''} au plus.`, `${v.left} more word${v.left === 1 ? '' : 's'} at most.`)}</span>
             {canGuess && <button className="btn onsea small" onClick={() => act({ t: 'end' })}>{t('Passer le tour', 'End the turn')}</button>}
           </p>
@@ -211,6 +236,11 @@ export default function PavillonsStage(props: StageProps<View>) {
         })}
       </ul>
 
+      {flash && flash.event === clueEvent && v.phase === 'play' && v.clue && <div key={flash.id} role="status" aria-live="polite" className={`pav-clue-flash light side-${KIND[v.clue.team]}`}>
+        <p className="pav-flash-team">{t(`Indice de ${teamName(v.clue.team, t)}`, `Clue from ${teamName(v.clue.team, t)}`)}</p>
+        <p className="pav-popup-clue" lang="fr">{v.clue.word} <b>{v.clue.count}</b></p>
+        <p>{v.clue.count === 0 ? t('Autant de mots que vous voulez.', 'As many words as you like.') : t(`${v.clue.count} mot${v.clue.count > 1 ? 's' : ''} à retrouver.`, `${v.clue.count} word${v.clue.count === 1 ? '' : 's'} to find.`)}</p>
+      </div>}
       {v.clues.length > 0 && (
         <p className="pav-log">
           {t('Indices donnés :', 'Clues given:')} {v.clues.map((c, i) => <span key={i} className={`side-${KIND[c.team]}`}><Mark k={c.team} /> {c.word} {c.count}</span>)}

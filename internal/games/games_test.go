@@ -62,8 +62,10 @@ func TestTerrePlaysToTheEnd(t *testing.T) {
 			now = now.Add(time.Second)
 			seat := g.turn
 			v := g.View(seat, now).(terreView)
-			if len(v.Hand) == 2 {
-				act(g, seat, now, `{"t":"terre"}`)
+			if len(v.Hand) == 1 && !v.Said {
+				if err := act(g, seat, now, `{"t":"terre"}`); err != nil {
+					t.Fatal(err)
+				}
 			}
 			var err error
 			switch {

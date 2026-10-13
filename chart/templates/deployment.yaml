@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "games.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ if .Values.maintenance }}0{{ else }}{{ .Values.replicaCount }}{{ end }}
   strategy:
     type: Recreate
   selector:
@@ -55,6 +55,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "games.databaseSecret" . }}
                   key: {{ include "games.databaseSecretKey" . }}
+            - name: GAMES_SHARED_ACCOUNTS
+              value: {{ .Values.database.sharedAccounts | quote }}
             {{- with .Values.publicUrl }}
             - name: GAMES_PUBLIC_URL
               value: {{ . | quote }}

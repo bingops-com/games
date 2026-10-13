@@ -215,6 +215,14 @@ const ICONS = {
       <path d="M14.500 6l3 3" />
     </>
   ),
+  // Remplir une zone du dessin : le pot de peinture.
+  bucket: (
+    <>
+      <path className="tint" d="M4 10l7-7 9 9-7 7a2 2 0 0 1-3 0l-6-6a2 2 0 0 1 0-3z" />
+      <path d="M3.5 12h16M8 2l6 6" />
+      <path className="dot" d="M20 16s-2 2.4-2 3.5a2 2 0 0 0 4 0C22 18.4 20 16 20 16z" />
+    </>
+  ),
   // Au hasard : le dé.
   dice: (
     <>

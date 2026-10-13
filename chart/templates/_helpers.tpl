@@ -34,7 +34,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 
 {{/* The secret and key holding the connection string. */}}
 {{- define "games.databaseSecret" -}}
-{{- if .Values.database.cnpg.enabled -}}
+{{- if and .Values.database.cnpg.enabled (not .Values.database.sharedAccounts) -}}
 {{- printf "%s-app" (include "games.postgresql" .) -}}
 {{- else -}}
 {{- required "database.existingSecret.name is required when database.cnpg.enabled is false" .Values.database.existingSecret.name -}}
@@ -42,7 +42,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "games.databaseSecretKey" -}}
-{{- if .Values.database.cnpg.enabled -}}uri{{- else -}}{{ .Values.database.existingSecret.key }}{{- end -}}
+{{- if and .Values.database.cnpg.enabled (not .Values.database.sharedAccounts) -}}uri{{- else -}}{{ .Values.database.existingSecret.key }}{{- end -}}
 {{- end }}
 
 {{- define "games.production" -}}
@@ -96,7 +96,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 {{- if .Values.database.cnpg.enabled -}}
 {{- if not .Values.database.cnpg.backup.enabled -}}{{- fail "production requires continuous database backups" -}}{{- end -}}
-{{- else -}}
+{{- end -}}
+{{- if or (not .Values.database.cnpg.enabled) .Values.database.sharedAccounts -}}
 {{- if empty .Values.database.existingSecret.backupRunbook -}}{{- fail "production external database requires its owning backupRunbook" -}}{{- end -}}
 {{- if empty .Values.networkPolicy.databaseTo -}}{{- fail "external database requires explicit networkPolicy.databaseTo peers" -}}{{- end -}}
 {{- end -}}

@@ -85,6 +85,8 @@ const SERVER: Record<string, string> = {
   "L'indice est déjà donné": 'The clue is already given',
   "L'indice ne peut pas être un mot de la grille": 'The clue cannot be a word of the grid',
   "L'indice tient en un seul mot": 'The clue must be a single word',
+  "L'indice doit contenir de 1 à 24 caractères": 'The clue must contain 1 to 24 characters',
+  'Utilisez un mot composé de lettres, avec tiret ou apostrophe à l’intérieur': 'Use a word made of letters, with hyphens or apostrophes inside it',
   'Message inconnu': 'Unknown message',
   'Mot de passe : 8 caractères minimum': 'Password: at least 8 characters',
   'Mot trop long': 'Word too long',

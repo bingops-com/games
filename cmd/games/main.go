@@ -49,7 +49,11 @@ func serve(log *slog.Logger) error {
 	var err error
 	for attempt := 1; ; attempt++ {
 		open, cancel := context.WithTimeout(ctx, 10*time.Second)
-		st, err = store.Open(open, url)
+		if os.Getenv("GAMES_SHARED_ACCOUNTS") == "true" {
+			st, err = store.OpenShared(open, url)
+		} else {
+			st, err = store.Open(open, url)
+		}
 		cancel()
 		if err == nil {
 			break

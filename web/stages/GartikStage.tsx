@@ -5,6 +5,7 @@ import { useT } from '@/lib/app';
 import type { Stroke } from '@/lib/sketch';
 import { nameAt, useNow, type StageProps } from '@/lib/table';
 import Guide from './Guide';
+import GameAnnouncement from './GameAnnouncement';
 import Pad from './Pad';
 
 interface Item {
@@ -62,6 +63,7 @@ export default function GartikStage({ st, skew, act }: StageProps<View>) {
     );
     return (
       <div className="gartik">
+        <GameAnnouncement event={v.phase === 'album' ? 'album' : null} initial title={t('Place aux albums !', 'Time for the albums!')} detail={t('Découvrez ensemble ce que vos phrases sont devenues.', 'Discover together what happened to your sentences.')} sound="round" />
         {v.phase === 'over'
           ? <Guide tone="wait" title={t('Tous les albums sont lus', 'Every album has been read')} />
           : reader
@@ -98,6 +100,7 @@ export default function GartikStage({ st, skew, act }: StageProps<View>) {
   );
   return (
     <div className="gartik">
+      <GameAnnouncement event={`${v.round}:${v.phase}`} initial title={t(`Manche ${v.round} sur ${v.rounds}`, `Round ${v.round} of ${v.rounds}`)} detail={v.phase === 'draw' ? t('À vos crayons !', 'Time to draw!') : v.phase === 'describe' ? t('Décrivez le dessin reçu.', 'Describe the drawing you received.') : t('Écrivez la première phrase.', 'Write the first sentence.')} sound="round" />
       {guide}
       {me >= 0 && (
         <>

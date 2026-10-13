@@ -70,3 +70,12 @@ if grep -E -q 'initdb:' "$check_dir/render.yaml"; then
   exit 1
 fi
 printf 'Chart security checks passed\n'
+# Shared credentials must preserve the original cluster and its backups:
+# disabling CNPG during cutover would let GitOps prune the source database.
+helm template check "$chart_root" -f "$chart_root/tests/production.yaml" --set database.sharedAccounts=true --set-string database.existingSecret.name=arcade-postgresql-app --set-string database.existingSecret.backupRunbook=apps/workloads/arcade/README.md --set-json 'networkPolicy.databaseTo=[{"podSelector":{"matchLabels":{"cnpg.io/cluster":"arcade-postgresql"}}}]' > "$check_dir/render.yaml"
+grep -E -q 'name: arcade-postgresql-app' "$check_dir/render.yaml"
+grep -E -q 'kind: Cluster' "$check_dir/render.yaml"
+grep -E -q 'name: GAMES_SHARED_ACCOUNTS' "$check_dir/render.yaml"
+helm template check "$chart_root" -f "$chart_root/tests/production.yaml" --set maintenance=true > "$check_dir/render.yaml"
+grep -E -q 'replicas: 0' "$check_dir/render.yaml"
+grep -E -q 'kind: Cluster' "$check_dir/render.yaml"

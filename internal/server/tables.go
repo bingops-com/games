@@ -181,6 +181,10 @@ func (s *Server) socket(w http.ResponseWriter, r *http.Request) {
 	tokens, last := float64(socketBurst), time.Now()
 	for {
 		_, msg, err := conn.Read(ctx)
+		if err != nil && (websocket.CloseStatus(err) == websocket.StatusGoingAway || websocket.CloseStatus(err) == 4000) {
+			c.Depart()
+			return
+		}
 		if err != nil || ctx.Err() != nil || (!expires.IsZero() && !time.Now().Before(expires)) {
 			return
 		}

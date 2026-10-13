@@ -30,6 +30,8 @@ export interface TableState<V = unknown> {
   seat: number;
   members: Member[];
   winners: number[] | null;
+  // Captured at game end, so names remain visible after a winner leaves.
+  winnerNames?: string[];
   // La partie s'est finie sur un abandon : elle ne compte pour personne.
   void: boolean;
   // N'importe qui peut trouver le salon ; le nombre de parties finies ici ; les réglages
@@ -144,9 +146,30 @@ export function useTable(code: string): TableLink {
     };
     setLink('connecting');
     void connect();
+    const depart = () => {
+      closed = true;
+      clearTimeout(retry);
+      const ws = socket.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ t: 'depart' }));
+        ws.close(4000, 'Page closed');
+      } else ws?.close();
+      App.leftRoom(code);
+    };
+    const restore = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      closed = false;
+      attempt = 0;
+      setLink('connecting');
+      void connect();
+    };
+    window.addEventListener('pagehide', depart);
+    window.addEventListener('pageshow', restore);
     return () => {
       closed = true;
       clearTimeout(retry);
+      window.removeEventListener('pagehide', depart);
+      window.removeEventListener('pageshow', restore);
       socket.current?.close();
       socket.current = null;
     };
