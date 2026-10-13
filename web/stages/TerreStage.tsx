@@ -254,7 +254,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
     if (c.c) return act({ t: 'play', id: c.id });
     setPicking(picking === c.id ? null : c.id);
   };
-  const canSay = !v.said && (v.exposed === me || (mine && v.hand.length <= 2));
+  const canSay = me >= 0 && v.winner < 0 && !v.said && v.hand.length === 1;
   const turnName = nameAt(st, v.turn);
   const color = colorName(v.color, t);
   const figure = figureOf(v.top, t);
@@ -284,7 +284,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
     guide = (
       <Guide tone="you" title={t('À vous de jouer', 'Your turn')}>
         {t(`Posez ${wanted} : les cartes relevées conviennent. Sinon, piochez.`, `Play ${wanted}: the raised cards fit. Otherwise, draw.`)}
-        {!v.said && v.hand.length === 2 && t(' Il vous restera une carte : annoncez « Ono ! » d’abord.', ' You will have one card left: call "Ono!" first.')}
+        {v.hand.length === 2 && t(' Après avoir posé votre carte, annoncez « Ono ! » s’il ne vous en reste qu’une.', ' After playing your card, call "Ono!" if you have one left.')}
       </Guide>
     );
   } else if (me < 0) {
@@ -347,7 +347,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
           <span className={`now-color card-${v.color}`} key={v.color}><Suit c={v.color} /> {t(`Couleur ${color}`, `Colour: ${color}`)}</span>
           {n > 2 && (
             <span className="ono-dir">
-              <svg className={v.dir < 0 ? 'back' : undefined} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13a7 7 0 1 0 2.5-5.4M4 4.5V9h4.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <svg className={v.dir < 0 ? 'back' : undefined} viewBox="0 0 24 24" aria-hidden="true"><g transform={v.dir < 0 ? 'translate(24 0) scale(-1 1)' : undefined}><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8M21 3v5h-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></g></svg>
               {v.dir > 0 ? t('Sens des aiguilles', 'Clockwise') : t('Sens inverse', 'Anticlockwise')}
             </span>
           )}
@@ -385,7 +385,7 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
           <div className="row-actions">
             {mine && v.drawn >= 0 && <button className="btn onsea small" onClick={() => act({ t: 'pass' })}>{t('Garder la carte et passer', 'Keep the card and pass')}</button>}
             {canSay && <button className="btn white small say" onClick={() => act({ t: 'terre' })}>{t('Ono !', 'Ono!')}</button>}
-            {v.said && v.hand.length <= 2 && <span className="said">{t('« Ono ! » annoncé', '"Ono!" called')}</span>}
+            {v.said && v.hand.length === 1 && <span className="said">{t('« Ono ! » annoncé', '"Ono!" called')}</span>}
           </div>
           {picking !== null && (
             <div className="pick" role="group" aria-label={t('Couleur du joker', 'Colour of the wild card')}>

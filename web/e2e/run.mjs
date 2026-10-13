@@ -12,7 +12,6 @@ import axe from 'axe-core';
 const BASE = process.env.GAMES_URL ?? 'http://localhost:3778';
 if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(BASE)) throw new Error('E2E tests require an isolated loopback instance');
 const SYSTEM = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? SYSTEM, args: ['--no-sandbox'] });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = () => Math.random().toString(36).slice(2, 7);
@@ -23,7 +22,7 @@ function check(ok, what) {
 // Une page : un joueur. Les erreurs de la page font échouer le scénario.
 async function player({ width = 1366, height = 768, account = '' } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR' });
-  await context.addInitScript(() => { const Native = window.WebSocket; window.WebSocket = class extends Native { constructor(...args) { super(...args); window.testSocket = this; this.addEventListener('message', e => { const data = JSON.parse(e.data); if (data.t === 'state') window.roomState = data; }); } }; });
+  await context.addInitScript(() => { const Native = window.WebSocket; window.WebSocket = class extends Native { constructor(...args) { super(...args); window.testSocket = this; this.addEventListener('message', e => { if(window.freezeRoomState && e.isTrusted){e.stopImmediatePropagation();return;} const data = JSON.parse(e.data); if (data.t === 'state') window.roomState = data; }); } }; });
   const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(String(e)));
@@ -66,6 +65,98 @@ const openMenu = async (page) => {
 };
 
 const scenarios = {
+  async resultatsTousJeux() {
+    // Visual end-state fixtures use the actual mounted game views, without
+    // mutating the development server or adding test routes to the application.
+    for (const game of ['Ono','Codenoms','BoomParty','Bombermat','Skribouille','Gartik']) {
+      const {players} = await room(game,4);
+      try {
+        await start(players[0]);
+        const [host,other] = players;
+        const teamGame = game === 'Codenoms' || game === 'Skribouille';
+        const seats = teamGame ? [0,2] : [0];
+        const names = await host.evaluate(seats => seats.map(seat=>window.roomState.members.find(m=>m.seat===seat).name),seats);
+        for (const p of [host,other]) await p.evaluate(({seats,names}) => {
+          window.freezeRoomState = true;
+          window.testSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...window.roomState,phase:'over',winners:seats,winnerNames:names,void:false})}));
+        },{seats,names});
+        for (const [i,p] of [host,other].entries()) {
+          await p.locator('.outcome').waitFor();
+          check(await p.locator('.outcome-title').innerText() === (game==='Gartik'?'Partie terminée':i===0?'Victoire':'Défaite'), `${game}: résultat ambigu`);
+          if (game!=='Gartik') for (const name of names) check((await p.locator('.outcome-winners').innerText()).includes(name), `${game}: un gagnant n’est pas nommé`);
+          for (const [width,height] of [[320,700],[844,390],[1366,768]]) for(const colorScheme of ['light','dark']) {
+            await p.setViewportSize({width,height});await p.emulateMedia({colorScheme,reducedMotion:'reduce'});
+            await p.addScriptTag({content:axe.source});
+            const issues = await p.evaluate(async()=>(await axe.run()).violations.map(v=>({id:v.id,targets:v.nodes.map(n=>n.target)})));
+            check(!issues.length, `${game} résultat ${i} ${width} ${colorScheme}: ${JSON.stringify(issues)}`);
+            check(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1), `${game}: résultat trop large`);
+            const colors = await p.locator('.outcome-title').evaluate(el=>{const c=getComputedStyle(el).color.match(/\d+/g).map(Number);return {red:c[0],green:c[1],size:parseFloat(getComputedStyle(el).fontSize)};});
+            check(colors.size>=44, `${game}: résultat trop petit`);
+            if(game!=='Gartik')check(i===0?colors.green>colors.red:colors.red>colors.green, `${game}: couleur incorrecte pour le résultat`);
+            await p.getByRole('button',{name:'Retour au salon',exact:true}).scrollIntoViewIfNeeded();
+            await p.getByRole('button',{name:'Retour au salon',exact:true}).click({trial:true});
+          }
+        }
+        if(game==='Ono') {
+          await other.evaluate(()=>window.testSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...window.roomState,phase:'over',winners:[],winnerNames:[],void:false})})));
+          await other.getByRole('heading',{name:'Match nul',exact:true}).waitFor();
+          await other.evaluate(()=>window.testSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...window.roomState,phase:'over',winners:[0],winnerNames:['Test'],void:true})})));
+          await other.getByRole('heading',{name:'Partie interrompue',exact:true}).waitFor();
+        }
+      } finally {for (const p of players) await p.context().close();}
+    }
+  },
+
+  async onoAnnonceEtSens() {
+    const {players} = await room('Ono',3);
+    await start(players[0]);
+    for (const p of players) await p.locator('.ono-table.dealing').waitFor({state:'detached'});
+    const original = await players[0].evaluate(()=>window.roomState);
+    // Check the actual rotation independently of the arrow's mirrored artwork.
+    for (const dir of [1,-1]) {
+      const host=players[0];
+      await host.evaluate(dir=>window.testSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({...window.roomState,view:{...window.roomState.view,dir}})})),dir);
+      await host.waitForFunction(dir=>document.querySelector('.ono-dir svg').classList.contains('back')===(dir<0),dir);
+      const rotation = await host.locator('.ono-dir svg').evaluate(el=>{
+        const animation=el.getAnimations()[0];animation.pause();animation.currentTime=0;
+        const start=parseFloat(getComputedStyle(el).rotate);animation.currentTime=1250;
+        const end=parseFloat(getComputedStyle(el).rotate);
+        const delta=((end-start+540)%360)-180;
+        const mirrored=!!el.querySelector('g').getAttribute('transform');
+        animation.play();return {delta,mirrored,scale:getComputedStyle(el).scale};
+      });
+      check(rotation.delta*dir>0 && rotation.mirrored===(dir<0) && rotation.scale==='none','la flèche Ono tourne à l’envers');
+    }
+    // Restore the real server view before playing. Never fabricate card hands.
+    await players[0].evaluate(state=>window.testSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify(state)})),original);
+    let called=false;
+    for(let move=0;move<300&&!called;move++) {
+      for(const p of players) {
+        const state=await p.evaluate(()=>window.roomState);
+        if(state.phase==='over')break;
+        const cards=state.view.hand.length;
+        check(await p.locator('.btn.say').count()===(cards===1&&!state.view.said?1:0),'Ono peut être annoncé sans une seule carte en main');
+        if(cards===1&&!state.view.said) {
+          await p.locator('.btn.say').click();await p.locator('.said').waitFor();
+          check(await p.locator('.btn.say').count()===0,'Ono reste annonçable après l’annonce');called=true;break;
+        }
+      }
+      if(called)break;
+      const turn=await players[1].evaluate(()=>window.roomState.view.turn);
+      const active=players[turn];
+      const state=await active.evaluate(()=>window.roomState);
+      if(state.phase==='over')break;
+      const v=state.view;
+      const possible=v.hand.filter(c=>v.playable.includes(c.id));
+      const card=possible.find(c=>/^\d$/.test(c.k))??possible[0];
+      const action=card?{t:'play',id:card.id,color:card.c||'lagon'}:v.drawn>=0?{t:'pass'}:{t:'draw'};
+      await active.evaluate(action=>window.testSocket.send(JSON.stringify({t:'act',a:action})),action);
+      await active.waitForFunction(now=>window.roomState.now>now,state.now);
+      await sleep(70);
+    }
+    check(called,'aucun joueur ne peut annoncer Ono après avoir posé son avant-dernière carte');
+  },
+
   async departSite() {
     const { code, players: [host, guest, third] } = await room('Ono', 3);
     await start(host);
@@ -109,29 +200,47 @@ const scenarios = {
     const artist = (await players[0].locator('.pav-clue').count()) ? players[0] : players[1];
     const guesser = artist === players[0] ? players[2] : players[3];
     const currentTeam = await artist.locator('.pav-team.turn b').innerText();
+    const initialTeam = await artist.evaluate(() => window.roomState.view.turn);
+    const forbidden = await artist.evaluate(() => window.roomState.view.key.indexOf(3));
     const revealed = await artist.locator('.known .word').evaluateAll(words => new Set(words.map(el => getComputedStyle(el).backgroundColor)).size);
     check(revealed >= 4, 'les mots des deux équipes, neutres et interdit ne sont pas assez distingués');
     check(await guesser.locator('.pav-grid .is-babord:not(.shown), .pav-grid .is-tribord:not(.shown), .pav-grid .is-interdit:not(.shown)').count() === 0, 'la couleur révèle les mots secrets aux joueurs qui devinent');
-    await artist.locator('.pav-clue input').fill('Océan');
+    await artist.locator('.pav-clue input').fill('deux mots');
+    await artist.getByRole('button',{name:'Donner l’indice',exact:true}).click();
+    await artist.locator('.toast',{hasText:"L'indice tient en un seul mot"}).waitFor();
+    check(await artist.locator('.pav-clue input').inputValue() === 'deux mots', 'un indice refusé est effacé avant correction');
+    await guesser.getByRole('button', { name: 'Règles', exact: true }).focus();
+    await artist.locator('.pav-clue input').fill('A');
     await artist.getByRole('button', { name: 'Donner l’indice', exact: true }).click();
+    await Promise.all(players.map(p => p.locator('.pav-clue-flash').waitFor()));
+    const receivedAt = Date.now();
     for (const p of players) {
-      const dialog = p.getByRole('dialog'); await dialog.waitFor();
-      check((await dialog.innerText()).includes('Océan'), 'le popup ne montre pas l’indice reçu');
-      if (p === artist) {
-        for (const [width,height] of [[320,700],[390,844],[1366,768]]) {
-          await p.setViewportSize({width,height});
-          for (const colorScheme of ['light','dark']) {
-            await p.emulateMedia({colorScheme,reducedMotion:'reduce'});
-            await p.addScriptTag({content:axe.source});
-            const issues = await p.evaluate(async () => (await axe.run()).violations.map(v => ({id:v.id,targets:v.nodes.map(n=>n.target)})));
-            check(!issues.length, `popup indice ${width} ${colorScheme}: ${JSON.stringify(issues)}`);
-            await p.screenshot({path:`/tmp/games-codenoms-clue-${width}-${colorScheme}.png`});
-          }
-        }
-      }
-      await p.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
-      check((await p.locator('.clue-word').textContent()).includes('Océan'), 'l’indice disparaît après fermeture du popup');
+      check((await p.locator('.pav-popup-clue').innerText()).includes('A'), 'une lettre seule est refusée ou absente de l’annonce');
+      check(await p.getByRole('dialog').count() === 0, 'l’indice ouvre une fenêtre bloquante');
+      check(await p.locator('.pav-clue-flash').evaluate(el => getComputedStyle(el).pointerEvents) === 'none', 'l’annonce bloque la grille');
     }
+    check(await guesser.evaluate(() => document.activeElement.textContent.includes('Règles')), 'l’indice vole le focus clavier');
+    check(await artist.locator('.pav-clue-flash').evaluate(el => getComputedStyle(el).animationName) === 'pav-clue-reveal', 'l’indice n’est pas animé');
+    await artist.locator('.pav-clue-flash').waitFor({state:'detached',timeout:4500});
+    check(Date.now()-receivedAt >= 2400 && Date.now()-receivedAt <= 4500, 'l’annonce ne dure pas trois secondes');
+    for (const p of players) {
+      await p.locator('.pav-clue-flash').waitFor({state:'detached'});
+      check((await p.locator('.clue-word').textContent()).includes('A'), 'l’indice permanent disparaît avec l’annonce');
+    }
+    for (const [width,height] of [[320,700],[390,844],[1366,768]]) {
+      await artist.setViewportSize({width,height});
+      for (const colorScheme of ['light','dark']) {
+        await artist.emulateMedia({colorScheme,reducedMotion:'reduce'});
+        await artist.getByRole('button',{name:'Revoir l’indice',exact:true}).click();
+        await artist.locator('.pav-clue-flash').waitFor();
+        await artist.addScriptTag({content:axe.source});
+        const issues = await artist.evaluate(async () => (await axe.run()).violations.map(v => ({id:v.id,targets:v.nodes.map(n=>n.target)})));
+        check(!issues.length, `annonce indice ${width} ${colorScheme}: ${JSON.stringify(issues)}`);
+        check(await artist.locator('.pav-clue-flash').evaluate(el => getComputedStyle(el).animationName) === 'none', 'l’annonce ignore la réduction des animations');
+        await artist.screenshot({path:`/tmp/games-codenoms-clue-${width}-${colorScheme}.png`});
+      }
+    }
+    await artist.locator('.pav-clue-flash').waitFor({state:'detached'});
     for (const p of [artist,guesser]) {
       for (const [width,height] of [[320,700],[390,844],[1366,768]]) {
         await p.setViewportSize({width,height});
@@ -145,11 +254,30 @@ const scenarios = {
       }
     }
     await guesser.getByRole('button', { name: 'Revoir l’indice', exact: true }).click();
-    await guesser.getByRole('button', { name: 'Voir la grille', exact: true }).click();
+    await guesser.locator('.pav-clue-flash').waitFor();
     await guesser.getByRole('button', { name: 'Passer le tour', exact: true }).click();
     await guesser.waitForFunction(before => !document.querySelector('.pav-team.turn b').innerText.includes(before.split(' (')[0]), currentTeam);
     await guesser.locator('.game-announcement').filter({ hasText: 'Au tour de' }).waitFor();
     check(await guesser.getByRole('dialog').count() === 0, 'un ancien indice reste ouvert après le changement d’équipe');
+    await guesser.locator('.pav-clue-flash').waitFor({state:'detached'});
+    const nextGuide = players[1-initialTeam], nextGuesser = players[3-initialTeam];
+    await nextGuide.locator('.pav-clue input').fill('É');
+    await nextGuide.getByRole('button',{name:'Donner l’indice',exact:true}).click();
+    await nextGuesser.locator('.pav-clue-flash').waitFor();
+    await nextGuesser.locator('.pav-grid .word').nth(forbidden).click();
+    await artist.waitForFunction(() => window.roomState.phase === 'over');
+    const winnerNames = await artist.evaluate(() => window.roomState.winnerNames);
+    for (const p of players) {
+      await p.locator('.outcome').waitFor();
+      const victory = await p.evaluate(() => window.roomState.winners.includes(window.roomState.seat));
+      check(await p.locator('.outcome-title').innerText() === (victory?'Victoire':'Défaite'), 'le résultat de Codenoms ne distingue pas victoire et défaite');
+      for (const name of winnerNames) check((await p.locator('.outcome-winners').innerText()).includes(name), 'un gagnant de Codenoms manque sous le résultat');
+    }
+    await artist.screenshot({path:'/tmp/games-codenoms-victoire.png'});
+    await nextGuesser.screenshot({path:'/tmp/games-codenoms-defaite.png'});
+    await guesser.getByRole('button',{name:'Quitter le salon',exact:true}).click();
+    await nextGuesser.waitForFunction(() => window.roomState.members.length === 3);
+    for (const name of winnerNames) check((await nextGuesser.locator('.outcome-winners').innerText()).includes(name), 'quitter le salon efface le pseudo du gagnant');
   },
 
   async gartikManches() {
@@ -355,11 +483,13 @@ const scenarios = {
       await host.locator('.pd-count').waitFor({ state: 'detached', timeout: 8000 });
       await host.keyboard.press('Space');
       await host.locator('.outcome').waitFor({ timeout: 6000 });
-      await guest.locator('.outcome-card strong', { hasText: 'Victoire explosive !' }).waitFor();
+      await guest.locator('.outcome-title', { hasText: /^Victoire$/ }).waitFor();
     };
     await start(host);
     await finish();
-    check((await host.locator('.outcome-card strong').innerText()).includes('remporte la partie'), 'le perdant ne voit pas le gagnant');
+    check(await host.locator('.outcome-title').innerText() === 'Défaite', 'le perdant ne voit pas Défaite');
+    const winnerName = await guest.evaluate(() => window.roomState.members.find(m => m.seat === window.roomState.seat).name);
+    for (const p of [host,guest]) check((await p.locator('.outcome-winners').innerText()).includes(winnerName), 'le pseudo du gagnant manque sous le résultat');
     for (const [width, height] of [[1366, 768], [1280, 620], [390, 800]]) {
       await guest.setViewportSize({ width, height });
       for (const colorScheme of ['light', 'dark']) {
@@ -731,8 +861,12 @@ const scenarios = {
   },
 };
 
-const wanted = process.argv.slice(2);
-const names = Object.keys(scenarios).filter((n) => wanted.length === 0 || wanted.some((w) => n.includes(w)));
+const args = process.argv.slice(2);
+const wanted = args.filter(a => !['--list','--exact'].includes(a));
+const names = Object.keys(scenarios).filter((n) => wanted.length === 0 || wanted.some((w) => args.includes('--exact') ? n === w : n.includes(w)));
+if (!names.length) throw new Error('No browser scenario matches');
+if (args.includes('--list')) { console.log(names.join('\n')); process.exit(0); }
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? SYSTEM, args: ['--no-sandbox'] });
 let failed = 0;
 for (const name of names) {
   const before = browser.contexts().length;

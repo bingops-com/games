@@ -319,16 +319,13 @@ function After({ played, voided }: { played: boolean; voided: boolean }) {
 }
 
 function result(st: TableState, game: Game, t: T) {
-  // Un jeu sans gagnant : on a joué pour rire.
-  if (game.noWinner) return t('C’est fini !', 'That’s all!');
-  const winners = st.members.filter((m) => m.seat >= 0 && st.winners?.includes(m.seat));
-  if (winners.length === 0) return t('Match nul !', 'It’s a draw!');
-  if (winners.some((m) => m.id === st.you)) {
-    if (game.id === 'poudriere') return t('Victoire explosive !', 'An explosive victory!');
-    return winners.length > 1 ? t('Victoire d’équipe !', 'Team victory!') : t('Victoire !', 'Victory!');
-  }
-  const names = winners.map((m) => m.name).join(', ');
-  return winners.length > 1 ? t(`${names} remportent la partie !`, `${names} win the game!`) : t(`${names} remporte la partie !`, `${names} wins the game!`);
+  if (st.void) return { title: t('Partie interrompue', 'Game interrupted'), tone: 'neutral', names: [] };
+  if (game.noWinner) return { title: t('Partie terminée', 'Game over'), tone: 'neutral', names: [] };
+  if (!st.winners?.length) return { title: t('Match nul', 'Draw'), tone: 'neutral', names: [] };
+  const names = st.winnerNames?.length ? st.winnerNames : st.members.filter(m => m.seat >= 0 && st.winners?.includes(m.seat)).map(m => m.name);
+  // Spectators see the winning result without being classified as losers.
+  const victory = st.seat < 0 || st.winners.includes(st.seat);
+  return { title: victory ? t('Victoire', 'Victory') : t('Défaite', 'Defeat'), tone: victory ? 'win' : 'loss', names };
 }
 
 function Room({ link, game }: { link: TableLink; game: Game }) {
@@ -365,9 +362,10 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
     return () => clearTimeout(id);
   }, [over]);
   // La fin de la partie et l'arrivée d'un joueur s'entendent.
-  const won = over && (game.noWinner || st.members.some((m) => m.id === st.you && m.seat >= 0 && st.winners?.includes(m.seat)));
+  const outcome = result(st, game, t);
+  const won = over && outcome.tone === 'win';
   useEffect(() => {
-    if (over) play(won ? 'win' : 'lose');
+    if (over) play(outcome.tone === 'neutral' ? 'round' : won ? 'win' : 'lose');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [over]);
   const crowd = st.members.length;
@@ -397,14 +395,15 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
             <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}><Ic name={full ? 'shrink' : 'expand'} />{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
           </span>
         </div>
-        {playing ? <Stage st={st} skew={link.skew} act={link.act} /> : <Lobby st={displayedState} game={game} link={link} rules={() => setRules(true)} report={setReported} />}
+        {playing ? <div className="stage-host" inert={over}><Stage st={st} skew={link.skew} act={link.act} /></div> : <Lobby st={displayedState} game={game} link={link} rules={() => setRules(true)} report={setReported} />}
         {st.phase === 'playing' && !['skrib', 'gartik', 'pavillons'].includes(game.id) && <GameAnnouncement event={`${st.game}:${st.played}`} initial title={t('Nouvelle partie !', 'New game!')} detail={game.name} sound="round" />}
         {over && !showingLobby && (
           <div className="outcome" role="status">
-            <div className="outcome-card light">
+            <div className="outcome-card light" data-result={outcome.tone}>
               <GameCover id={game.id} />
               <p className="outcome-label">{t('Partie terminée', 'Game over')}</p>
-              <h2><strong>{result(st, game, t)}</strong></h2>
+              <h2><strong className="outcome-title">{outcome.title}</strong></h2>
+              {outcome.names.length > 0 && <p className="outcome-winners"><span className="sr">{t('Gagnants : ', 'Winners: ')}</span>{outcome.names.join(', ')}</p>}
               {game.id === 'poudriere' && <p className="outcome-recap">{st.winners?.length === 0
                 ? t('L’arène n’a épargné personne. Prenez votre revanche !', 'The arena spared nobody. Time for a rematch!')
                 : won

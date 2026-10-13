@@ -2,7 +2,6 @@
 
 import { play } from '@/lib/sound';
 import { useEffect, useRef, useState, type FormEvent, type CSSProperties } from 'react';
-import { Dialog } from '@/components/ui';
 import { useT } from '@/lib/app';
 import { Avatar } from '@/lib/avatar';
 import type { T } from '@/lib/i18n';
@@ -106,14 +105,24 @@ export default function PavillonsStage(props: StageProps<View>) {
   const me = st.seat;
   const [word, setWord] = useState('');
   const [count, setCount] = useState(1);
-  const [showClue, setShowClue] = useState(false);
+  const [flash, setFlash] = useState<{ event: string; id: number } | null>(null);
+  const flashId = useRef(0);
   const clueEvent = v.clue ? `${v.clues.length}:${v.clue.team}:${v.clue.word}:${v.clue.count}` : '';
   const previousClue = useRef(clueEvent);
   useEffect(() => {
-    if (clueEvent && clueEvent !== previousClue.current) { setShowClue(true); play('clue'); }
-    if (!clueEvent) setShowClue(false);
+    if (clueEvent && clueEvent !== previousClue.current) {
+      setFlash({ event: clueEvent, id: ++flashId.current });
+      setWord('');
+      play('clue');
+    }
+    if (!clueEvent) setFlash(null);
     previousClue.current = clueEvent;
   }, [clueEvent]);
+  useEffect(() => {
+    if (!flash) return;
+    const timer = setTimeout(() => setFlash(null), 3000);
+    return () => clearTimeout(timer);
+  }, [flash]);
   // Un mot retourné s'entend.
   const turned = v.last ? `${v.last.i}` : '';
   useEffect(() => {
@@ -129,7 +138,6 @@ export default function PavillonsStage(props: StageProps<View>) {
     e.preventDefault();
     if (!word.trim()) return;
     act({ t: 'clue', word: word.trim(), n: count });
-    setWord('');
   };
   const guideOf = (team: number) => nameAt(st, v.team.findIndex((x, seat) => x === team && v.guide[seat]));
   const turnTeam = teamName(v.turn, t);
@@ -199,7 +207,7 @@ export default function PavillonsStage(props: StageProps<View>) {
         {v.phase === 'play' && v.clue && (
           <p>
             {t(`Indice de ${turnTeam} :`, `${turnTeam}'s clue:`)} <strong className="clue-word" key={`${v.clue.word}-${v.clues.length}`}>{v.clue.word} <b>{v.clue.count}</b></strong>
-            <button type="button" className="btn onsea small" onClick={() => setShowClue(true)}>{t('Revoir l’indice', 'Show clue again')}</button>
+            <button type="button" className="btn onsea small" onClick={() => setFlash({ event: clueEvent, id: ++flashId.current })}>{t('Revoir l’indice', 'Show clue again')}</button>
             <span>{v.clue.count === 0 ? t('Autant de mots que vous voulez.', 'As many words as you like.') : t(`Encore ${v.left} mot${v.left > 1 ? 's' : ''} au plus.`, `${v.left} more word${v.left === 1 ? '' : 's'} at most.`)}</span>
             {canGuess && <button className="btn onsea small" onClick={() => act({ t: 'end' })}>{t('Passer le tour', 'End the turn')}</button>}
           </p>
@@ -228,11 +236,11 @@ export default function PavillonsStage(props: StageProps<View>) {
         })}
       </ul>
 
-      {showClue && v.clue && <Dialog title={t(`Nouvel indice de ${teamName(v.clue.team, t)}`, `New clue from ${teamName(v.clue.team, t)}`)} onClose={() => setShowClue(false)} className={`pav-clue-dialog side-${KIND[v.clue.team]}`}>
+      {flash && flash.event === clueEvent && v.phase === 'play' && v.clue && <div key={flash.id} role="status" aria-live="polite" className={`pav-clue-flash light side-${KIND[v.clue.team]}`}>
+        <p className="pav-flash-team">{t(`Indice de ${teamName(v.clue.team, t)}`, `Clue from ${teamName(v.clue.team, t)}`)}</p>
         <p className="pav-popup-clue" lang="fr">{v.clue.word} <b>{v.clue.count}</b></p>
         <p>{v.clue.count === 0 ? t('Autant de mots que vous voulez.', 'As many words as you like.') : t(`${v.clue.count} mot${v.clue.count > 1 ? 's' : ''} à retrouver.`, `${v.clue.count} word${v.clue.count === 1 ? '' : 's'} to find.`)}</p>
-        <button className="btn primary" onClick={() => setShowClue(false)}>{t('Voir la grille', 'See the grid')}</button>
-      </Dialog>}
+      </div>}
       {v.clues.length > 0 && (
         <p className="pav-log">
           {t('Indices donnés :', 'Clues given:')} {v.clues.map((c, i) => <span key={i} className={`side-${KIND[c.team]}`}><Mark k={c.team} /> {c.word} {c.count}</span>)}

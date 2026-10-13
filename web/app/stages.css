@@ -43,13 +43,15 @@
 }
 /* La scène d'un jeu occupe ce qui reste et y fait tenir ses pièces. Si la fenêtre est
    vraiment trop petite, c'est elle qui défile, jamais la page. */
-.board > :nth-child(2) {
+.board > :nth-child(2),
+.stage-host > :first-child {
   flex: 1;
   min-height: 0;
   overflow: hidden auto;
   /* Les pièces et effets restent dans la scène, sous le résultat de fin de partie. */
   isolation: isolate;
 }
+.stage-host { display: contents; }
 .board-bar {
   display: flex;
   align-items: center;
@@ -1045,7 +1047,6 @@ button.crew-chip:hover,
 }
 .ono-dir svg.back {
   animation-direction: reverse;
-  scale: -1 1;
 }
 @keyframes ono-spin {
   to {
@@ -3860,6 +3861,33 @@ button.crew-chip:hover,
   text-align: center;
 }
 .pav-popup-clue b { display: inline-block; margin-left: 0.4rem; }
+.pav { position: relative; isolation: isolate; }
+.pav-clue-flash {
+  position: absolute;
+  z-index: 35;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(34rem, calc(100% - 1rem));
+  padding: clamp(0.85rem, 3vw, 1.5rem);
+  border: 3px solid var(--side);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow-pop);
+  text-align: center;
+  pointer-events: none;
+  animation: pav-clue-reveal 3s var(--ease) both;
+}
+.pav-clue-flash .pav-popup-clue { font-size: clamp(2.75rem, 10vw, 5rem); margin-block: 0.6rem; }
+.pav-flash-team { font-weight: 700; }
+@keyframes pav-clue-reveal {
+  0% { opacity: 0; transform: scale(0.88); }
+  10%, 88% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.03); }
+}
+.outcome-card .outcome-title { font-size: clamp(2.75rem, 8vw, 5rem); line-height: 1.02; }
+.outcome-card[data-result='win'] .outcome-title { color: #146b3a; }
+.outcome-card[data-result='loss'] .outcome-title { color: var(--danger); }
+.outcome-winners { margin: -0.35rem 0 0; font-size: clamp(1.1rem, 3vw, 1.4rem); font-weight: 700; overflow-wrap: anywhere; max-width: 100%; }
 .known .word:not(.shown) .mark { fill: currentColor; }
 .known .word.is-neutre { background: var(--pale); color: var(--game-ink); }
 .known .word.is-babord:not(:disabled):hover { background: color-mix(in srgb, var(--corail) 80%, white); }
@@ -3875,4 +3903,4 @@ button.crew-chip:hover,
   .pav-team > span { font-size: 0.8125rem; }
   .pav-now p { font-size: 0.95rem; }
 }
-@media (prefers-reduced-motion: reduce) { .game-announcement { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .game-announcement, .pav-clue-flash { animation: none; } }

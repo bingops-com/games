@@ -165,7 +165,7 @@ func (g *terre) Act(seat int, action json.RawMessage, now time.Time) error {
 	}
 	switch a.T {
 	case "terre":
-		if g.exposed == seat || (g.turn == seat && len(g.hands[seat]) <= 2) {
+		if len(g.hands[seat]) == 1 && !g.said[seat] {
 			g.said[seat] = true
 			if g.exposed == seat {
 				g.exposed = -1

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A fresh local process per suite keeps production rate limits intact.
+# A fresh local process per scenario keeps production rate limits intact.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 : "${GAMES_DATABASE_URL:?Set GAMES_DATABASE_URL to an isolated development database}"
@@ -20,7 +20,7 @@ stop_server() {
 cleanup() { stop_server; rm -rf "$regression_tmp"; }
 trap cleanup EXIT
 go build -o "$regression_tmp/games" ./cmd/games
-for suite in run accessibility; do
+start_server() {
   GAMES_ADDR="127.0.0.1:$regression_port" "$regression_tmp/games" >"$regression_tmp/server.log" 2>&1 &
   regression_pid=$!
   regression_ready=false
@@ -33,6 +33,15 @@ for suite in run accessibility; do
     echo 'The isolated Games test server did not become ready; check the test database and port' >&2
     exit 1
   fi
-  (cd web && GAMES_URL="http://127.0.0.1:$regression_port" node "e2e/$suite.mjs" "$@")
+}
+mapfile -t regression_scenarios < <(cd web && node e2e/run.mjs --list "$@")
+if (( ${#regression_scenarios[@]} == 0 )); then echo 'No browser scenario matches' >&2; exit 1; fi
+for scenario in "${regression_scenarios[@]}"; do
+  start_server
+  (cd web && GAMES_URL="http://127.0.0.1:$regression_port" node e2e/run.mjs --exact "$scenario")
   stop_server
 done
+printf '%s gameplay scenarios checked with isolated servers\n' "${#regression_scenarios[@]}"
+start_server
+(cd web && GAMES_URL="http://127.0.0.1:$regression_port" node e2e/accessibility.mjs)
+stop_server

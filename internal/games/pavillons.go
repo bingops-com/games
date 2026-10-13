@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Codenoms follows the rules of Codenames: two teams, a grid of twenty-five
@@ -117,8 +119,10 @@ func (g *pavillons) endTurn() {
 // fold compares words whatever their case and accents.
 func fold(s string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+	for _, r := range strings.ToLower(norm.NFC.String(strings.TrimSpace(s))) {
 		switch r {
+		case '’':
+			r = '\''
 		case 'à', 'â', 'ä':
 			r = 'a'
 		case 'é', 'è', 'ê', 'ë':
@@ -186,9 +190,15 @@ func (g *pavillons) Act(seat int, action json.RawMessage, now time.Time) error {
 		if g.clue != nil {
 			return Error("L'indice est déjà donné")
 		}
-		word := strings.TrimSpace(a.Word)
-		if n := utf8.RuneCountInString(word); n < 2 || n > 24 || strings.IndexFunc(word, func(r rune) bool { return !unicode.IsLetter(r) && r != '-' && r != '\'' }) >= 0 {
+		word := norm.NFC.String(strings.TrimSpace(a.Word))
+		if n := utf8.RuneCountInString(word); n < 1 || n > 24 {
+			return Error("L'indice doit contenir de 1 à 24 caractères")
+		}
+		if strings.IndexFunc(word, unicode.IsSpace) >= 0 {
 			return Error("L'indice tient en un seul mot")
+		}
+		if !pavClueWord(word) {
+			return Error("Utilisez un mot composé de lettres, avec tiret ou apostrophe à l’intérieur")
 		}
 		if slices.ContainsFunc(g.words, func(w string) bool { return fold(w) == fold(word) }) {
 			return Error("L'indice ne peut pas être un mot de la grille")
@@ -239,6 +249,24 @@ func (g *pavillons) Act(seat int, action json.RawMessage, now time.Time) error {
 		return Error("Action inconnue")
 	}
 	return nil
+}
+
+// A single letter is a valid clue. Separators belong inside a word, and
+// combining marks must follow a letter, including on non-French keyboards.
+func pavClueWord(word string) bool {
+	letter := false
+	for _, r := range word {
+		switch {
+		case unicode.IsLetter(r):
+			letter = true
+		case unicode.IsMark(r) && letter:
+		case (r == '-' || r == '\'' || r == '’') && letter:
+			letter = false
+		default:
+			return false
+		}
+	}
+	return letter
 }
 
 func (g *pavillons) Tick(time.Time) bool { return false }

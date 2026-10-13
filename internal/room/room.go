@@ -120,13 +120,14 @@ type Room struct {
 	Code string
 	spec games.Spec
 
-	members []*member // in order of arrival; the first is the host
-	clients map[*Client]bool
-	phase   string // "lobby", "playing", "over"
-	game    games.Game
-	winners []int
-	stop    chan struct{}
-	empty   time.Time // since when nobody is connected
+	members     []*member // in order of arrival; the first is the host
+	clients     map[*Client]bool
+	phase       string // "lobby", "playing", "over"
+	game        games.Game
+	winners     []int
+	winnerNames []string // Result names survive a winner leaving the room.
+	stop        chan struct{}
+	empty       time.Time // since when nobody is connected
 	// banned holds the players the host removed: they do not come back.
 	banned map[string]bool
 	// gone holds the seats that walked out of the game being played. void says
@@ -637,6 +638,7 @@ func (r *Room) tally() map[string]int {
 func (r *Room) toLobby() {
 	r.halt()
 	r.phase, r.game, r.winners = "lobby", nil, nil
+	r.winnerNames = nil
 	r.members = slices.DeleteFunc(r.members, func(m *member) bool { return m.conns == 0 })
 	for _, m := range r.members {
 		m.seat = -1
@@ -936,6 +938,15 @@ func (r *Room) finish(forfeit bool) {
 	r.halt()
 	r.void = forfeit
 	r.phase, r.winners = "over", winners
+	r.winnerNames = nil
+	for _, seat := range winners {
+		for _, m := range r.members {
+			if m.seat == seat {
+				r.winnerNames = append(r.winnerNames, m.Name)
+				break
+			}
+		}
+	}
 	if winners == nil {
 		r.winners = []int{}
 	}
@@ -1024,14 +1035,15 @@ type state struct {
 	Code string `json:"code"`
 	Game string `json:"game"`
 	// Min and Max are how many players the chosen game takes.
-	Min     int          `json:"min"`
-	Max     int          `json:"max"`
-	Phase   string       `json:"phase"`
-	Host    string       `json:"host"`
-	You     string       `json:"you"`
-	Seat    int          `json:"seat"`
-	Members []memberView `json:"members"`
-	Winners []int        `json:"winners"`
+	Min         int          `json:"min"`
+	Max         int          `json:"max"`
+	Phase       string       `json:"phase"`
+	Host        string       `json:"host"`
+	You         string       `json:"you"`
+	Seat        int          `json:"seat"`
+	Members     []memberView `json:"members"`
+	Winners     []int        `json:"winners"`
+	WinnerNames []string     `json:"winnerNames"`
 	// Void says the game ended on a walk-out and counts for nobody.
 	Void bool `json:"void"`
 	// Public says anyone may find the room; Played counts the games finished
@@ -1075,6 +1087,7 @@ func (r *Room) broadcast() {
 	connections := len(r.clients)
 	now := time.Now()
 	st := state{T: "state", Now: now.UnixMilli(), Code: r.Code, Game: r.spec.ID, Min: r.spec.Min, Max: r.spec.Max, Phase: r.phase, Winners: r.winners, Void: r.void, Members: []memberView{}}
+	st.WinnerNames = append([]string{}, r.winnerNames...)
 	if len(r.members) > 0 {
 		st.Host = r.members[0].ID
 	}

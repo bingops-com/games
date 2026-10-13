@@ -30,6 +30,8 @@ export interface TableState<V = unknown> {
   seat: number;
   members: Member[];
   winners: number[] | null;
+  // Captured at game end, so names remain visible after a winner leaves.
+  winnerNames?: string[];
   // La partie s'est finie sur un abandon : elle ne compte pour personne.
   void: boolean;
   // N'importe qui peut trouver le salon ; le nombre de parties finies ici ; les réglages

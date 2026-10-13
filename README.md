@@ -470,9 +470,9 @@ make e2e
 make e2e-accessibility
 ```
 
-Après `make web`, la suite complète peut construire son propre serveur temporaire
-et le redémarrer entre les parcours et l'audit d'accessibilité, sans assouplir les
-limites de débit :
+Après `make web`, la suite complète construit son propre serveur temporaire
+et le redémarre avant chaque scénario et avant l'audit d'accessibilité. Les
+quotas de création de salons et de connexion sont conservés :
 
 ```sh
 GAMES_DATABASE_URL=postgres://games:games@127.0.0.1:5432/games make e2e-check
@@ -678,17 +678,28 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   carte spéciale s'annonce en grand au milieu (« +2 », « passe », le sens qui
   tourne) et celui qui pioche encaisse. Une pioche produit une seule animation
   d'entrée dans sa propre main ; le dos en vol est réservé aux autres joueurs.
+  « Ono ! » s'annonce uniquement lorsqu'il reste exactement une carte, après
+  avoir joué l'avant-dernière : l'annonce reste possible hors de son tour.
+  La flèche tourne dans le sens qu'elle indique, y compris après une inversion.
 - **Codenoms** : les mots connus des donneurs d'indices ont des fonds colorés
   francs, accompagnés de formes ; les joueurs qui devinent ne voient aucune
   couleur secrète. Les deux équipes ont une bande de couleur, leur nom et leur
-  état. Un nouvel indice ouvre une fenêtre refermable avec une courte sonnerie ;
-  l'indice reste sur la grille et « Revoir l'indice » permet de le relire. Le
-  passage du tour annonce la nouvelle équipe. Seul l'hôte commence la grille.
+  état. Un indice accepte de 1 à 24 caractères : une lettre seule est valide,
+  les accents et apostrophes typographiques sont normalisés, les mots de la
+  grille restent interdits. Un nouvel indice apparaît en grand, animé pendant
+  trois secondes, avec une courte sonnerie ; l'annonce ne prend ni focus ni
+  clics et disparaît automatiquement. L'indice reste sur la grille et
+  « Revoir l'indice » rejoue l'annonce. Le passage du tour annonce la nouvelle
+  équipe. Seul l'hôte commence la grille.
 - **Manches et résultats** : une annonce visible, masquable et sonore marque
   les nouvelles parties, les dessins de Skribouille et les manches de Gartik.
   Le résultat de Skribouille indique le mot, les points gagnés et le temps avant
-  le prochain dessin. Le résultat final passe devant la scène ; tous les joueurs
-  peuvent retrouver le vote avec « Retour au salon », sans quitter le salon.
+  le prochain dessin. Le résultat final passe devant la scène : « Victoire »
+  en grand et en vert ou « Défaite » en rouge, avec les
+  pseudos gagnants dessous, conservés même après leur départ. Les parties nulles,
+  interrompues et Gartik (sans gagnant) gardent un message neutre. La scène derrière
+  le résultat ne reçoit plus le focus ni les clics. Chacun peut retrouver le vote
+  avec « Retour au salon », sans quitter le salon.
   Le son suit le réglage existant et les animations respectent la réduction
   des mouvements. Maintenir Espace ou le bouton tactile Bombermat pose les
   bombes disponibles en continu ; le serveur conserve les règles et les limites.
