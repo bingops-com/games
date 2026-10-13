@@ -3,6 +3,9 @@
 # and come back after a restart, in their lobby: a game being played is lost.
 replicaCount: 1
 
+# Explicit write freeze for a reviewed database migration; keeps DBs declared.
+maintenance: false
+
 # Also enabled automatically whenever ingress.enabled=true. Never open the
 # service publicly with this disabled, including through a tunnel.
 production: false
@@ -80,6 +83,8 @@ ingress:
     secretName: ""
 
 database:
+  # Requires the reviewed LabOps arcade migration; disabled for existing DBs.
+  sharedAccounts: false
   # A CloudNativePG cluster owned by this release. The server reads its
   # connection string from the secret CloudNativePG generates (<cluster>-app,
   # key "uri"), so no password is written in values or in Git.

@@ -1,5 +1,21 @@
 # games
 
+An opt-in common account database is prepared with Slots. Ordinary deployments
+keep their existing database: `GAMES_SHARED_ACCOUNTS` defaults to false. When
+enabled, Games requires a pre-migrated `identity` schema and uses `games,identity`
+as its search path. Password changes, recovery and administrator revocations
+invalidate shared player sessions in both applications; administrator access
+still requires the separate Authentik identity. Player cookies remain host-only,
+so users sign in on each site with the same credentials.
+
+The owning migration/backup/restore procedure is
+[LabOps Arcade](https://github.com/bingops-com/labops/tree/master/apps/workloads/arcade).
+The Helm `database.sharedAccounts` switch chooses the existing shared Secret
+while retaining the original CNPG cluster and backups. `maintenance: true`
+stops the application declaratively for the reviewed migration write freeze.
+Never enable shared mode against an ordinary Games/Slots database or disable
+the original CNPG resources as part of the cutover.
+
 Les jeux de société de `lab.bingo`, à jouer entre amis, chacun sur son écran,
 autour d'une même table.
 
