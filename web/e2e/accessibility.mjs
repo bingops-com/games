@@ -4,6 +4,7 @@ import { chromium } from "playwright-core";
 import axe from "axe-core";
 
 const base = process.env.GAMES_URL ?? "http://localhost:3778";
+if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(base)) throw new Error("Accessibility tests require an isolated loopback instance");
 const executablePath =
   process.env.CHROMIUM ??
   [
@@ -264,7 +265,7 @@ try {
         await artist.keyboard.press("ArrowRight");
         await artist.keyboard.press("Space");
         check(await sheet.evaluate((el) => el.getContext("2d").getImageData(505, 375, 1, 1).data[0] < 100), `${game}: le clavier ne dessine pas`);
-        await artist.getByRole("button", { name: "Annuler le trait", exact: true }).click();
+        await artist.getByRole("button", { name: "Annuler", exact: true }).click();
         check(await sheet.evaluate((el) => el.getContext("2d").getImageData(505, 375, 1, 1).data[0] === 255), `${game}: annulation du dessin impossible`);
         await artist.setViewportSize({ width: 1366, height: 900 });
         await audit(artist, `1366 dessin ${game}`);

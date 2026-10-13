@@ -75,6 +75,12 @@ mots. Les 358 mots de Codenoms, que Skribouille donne aussi à dessiner, sont da
   joueur retiré sort de la partie en cours et ne peut plus rejoindre ce salon.
 - Une connexion perdue garde la place 45 secondes ; la page se reconnecte seule.
   Passé ce délai, ou si le joueur quitte le salon, il sort de la partie.
+- Fermer l'onglet, recharger la page du salon ou naviguer hors du site quitte
+  immédiatement la partie si le navigateur transmet son départ. Un autre onglet
+  du même joueur conserve sa place ; changer d'onglet ne le fait pas partir.
+  Après rechargement, il rejoint comme spectateur jusqu'à la partie suivante.
+  Si le navigateur est tué sans notification, le délai réseau de 45 secondes
+  reste le filet de sécurité. L'hôte est remplacé lorsqu'il quitte le salon.
 - Un salon vide est gardé dix minutes. Les salons sont enregistrés en base et
   survivent à un redémarrage (voir « Dans un salon ») ; les parties en cours,
   elles, vivent dans la mémoire du serveur, et il ne faut qu'une instance.
@@ -109,8 +115,9 @@ moteurs de recherche.
 - Inviter ses amis dans un salon depuis l'interface (aujourd'hui on leur envoie
   le lien).
 - Des réglages par jeu (nombre de vies, durée du tour, variantes).
-- Dessin : pas de pot de peinture ni de gomme (le blanc en tient lieu), et un
-  dessin est limité à 9 000 points.
+- Dessin : pas de gomme dédiée (le blanc en tient lieu). Crayon et pot de peinture
+  fonctionnent dans Skribouille et Gartik Phone ; un dessin est limité à
+  9 000 points et 600 opérations, dont 32 remplissages au plus.
 - Des sons, et des illustrations par jeu comme dans slots.
 - `make dev` : le passage des WebSockets par le serveur de développement de
   Next.js n'a pas été vérifié ; `make run` sert tout depuis le binaire.
@@ -431,6 +438,9 @@ ont un titre principal ; les boutons graphiques ont un nom accessible, les
 sélections annoncent leur état et les scores défilants sont accessibles au
 clavier. Pour dessiner : flèches pour déplacer le pinceau, Espace ou Entrée pour
 commencer/finir un trait, Maj pour accélérer. Tab permet de quitter la feuille.
+Avec « Remplir », Espace ou Entrée remplit la zone sous le curseur ; revenir
+au crayon permet de reprendre les traits. Annuler et Tout effacer agissent aussi
+sur les remplissages, partagés en direct et conservés lors d'une reconnexion.
 
 L'audit Chromium/axe couvre les pages invité/connecté, les modales, les six jeux
 et les phases de dessin, de 320 px au PC, avec un format paysage. Il vérifie aussi
@@ -443,6 +453,21 @@ synthétiques, et écrit les diagnostics sans HTML ni codes de récupération da
 make e2e
 make e2e-accessibility
 ```
+
+Après `make web`, la suite complète peut construire son propre serveur temporaire
+et le redémarrer entre les parcours et l'audit d'accessibilité, sans assouplir les
+limites de débit :
+
+```sh
+GAMES_DATABASE_URL=postgres://games:games@127.0.0.1:5432/games make e2e-check
+```
+
+Cette URL est celle d'une base de développement avec des identifiants fictifs ;
+ne jamais pointer la suite vers une base de production. `GAMES_E2E_PORT` permet
+de remplacer le port local 3789 ; `CHROMIUM` choisit le navigateur installé.
+Les scripts navigateur refusent désormais une URL de site hors loopback.
+La CI installe la version Chromium associée au verrou Playwright et exécute
+les parcours de jeu, l'audit public et le parcours Authentik isolé avant publication.
 
 Ces contrôles automatisés ne remplacent pas une évaluation avec lecteur d'écran
 et des appareils réels ; ils ne constituent pas une certification WCAG.
@@ -628,14 +653,29 @@ une touche de menthe, familles Red Hat, chat à cache-œil.
   qui en a le plus est choisi, et une égalité garde le jeu déjà choisi. Quand
   l'hôte choisit, les voix lui disent ce que les autres préfèrent.
 - **Ono, le tour** : le joueur dont c'est le tour grandit, un anneau de menthe
-  se vide autour de lui avec son temps, les autres s'effacent, une flèche part
-  du tas vers sa place ; « À vous ! » s'annonce en grand et votre main
+  se vide autour de lui avec son temps, les autres s'effacent ;
+  « À vous ! » s'annonce en grand et votre main
   s'éclaire. Au début, les cartes se distribuent une à une depuis la pioche,
   puis la première carte du tas se retourne.
 - **Ono** : la main est en éventail au bord de la table ; une carte posée
   part de son joueur, se retourne en vol et reste de travers sur le tas ; une
   carte spéciale s'annonce en grand au milieu (« +2 », « passe », le sens qui
-  tourne) et celui qui pioche encaisse.
+  tourne) et celui qui pioche encaisse. Une pioche produit une seule animation
+  d'entrée dans sa propre main ; le dos en vol est réservé aux autres joueurs.
+- **Codenoms** : les mots connus des donneurs d'indices ont des fonds colorés
+  francs, accompagnés de formes ; les joueurs qui devinent ne voient aucune
+  couleur secrète. Les deux équipes ont une bande de couleur, leur nom et leur
+  état. Un nouvel indice ouvre une fenêtre refermable avec une courte sonnerie ;
+  l'indice reste sur la grille et « Revoir l'indice » permet de le relire. Le
+  passage du tour annonce la nouvelle équipe. Seul l'hôte commence la grille.
+- **Manches et résultats** : une annonce visible, masquable et sonore marque
+  les nouvelles parties, les dessins de Skribouille et les manches de Gartik.
+  Le résultat de Skribouille indique le mot, les points gagnés et le temps avant
+  le prochain dessin. Le résultat final passe devant la scène ; tous les joueurs
+  peuvent retrouver le vote avec « Retour au salon », sans quitter le salon.
+  Le son suit le réglage existant et les animations respectent la réduction
+  des mouvements. Maintenir Espace ou le bouton tactile Bombermat pose les
+  bombes disponibles en continu ; le serveur conserve les règles et les limites.
 - **Accueil** : « On joue ? », le nom, un gros bouton « Créer un salon », le
   champ pour rejoindre avec un code ; à côté, les jeux sur un panneau bleu,
   où l'on choisit le premier jeu du salon (cerclé de menthe) : un clic sur un

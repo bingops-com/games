@@ -6,6 +6,7 @@ import { Avatar } from '@/lib/avatar';
 import type { ChatLine, Member } from '@/lib/table';
 import Chat from './Chat';
 import { Bar, Dialog, Field, Ic, ICON_NAMES } from './ui';
+import GameAnnouncement from '@/stages/GameAnnouncement';
 
 // La page du kit : chaque pièce de l'interface, sur le papier et sur la mer, telle que les
 // pages l'emploient. Elle sert à choisir une pièce avant d'en écrire une nouvelle, et à
@@ -30,6 +31,7 @@ function Piece({ name, use, children }: { name: string; use: string; children: R
 export default function UiKit() {
   const t = useT();
   const [dialog, setDialog] = useState(false);
+  const [announcement, setAnnouncement] = useState(0);
   const [lines, setLines] = useState<ChatLine[]>(() => {
     const at = Date.now() - 4 * 60 * 1000;
     return [
@@ -151,6 +153,12 @@ export default function UiKit() {
             <button type="button" className="btn quiet" onClick={() => setDialog(false)}>{t('Annuler', 'Cancel')}</button>
           </Dialog>
         )}
+      </Piece>
+      <Piece name={t('Annonce de manche', 'Round announcement')} use={t('Une annonce masquable marque le changement de manche sans bloquer la partie.', 'A dismissible announcement marks a new round without blocking play.')}>
+        <button className="btn primary" onClick={() => setAnnouncement(n => n + 1)}>{t('Afficher une annonce', 'Show an announcement')}</button>
+        <div className="sea kit-demo" style={{ position: 'relative', minHeight: '11rem', marginTop: '0.75rem' }}>
+          <GameAnnouncement event={announcement ? String(announcement) : null} title={t('Nouvelle manche', 'New round')} detail={t('À vos crayons !', 'Time to draw!')} sound="round" />
+        </div>
       </Piece>
     </div>
   );

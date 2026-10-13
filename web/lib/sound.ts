@@ -5,7 +5,7 @@
 export type SoundName =
   | 'turn' | 'msg' | 'join' | 'win' | 'lose'
   | 'card' | 'draw' | 'hit' | 'call' | 'flip'
-  | 'bomb' | 'boom' | 'crate' | 'pick' | 'out';
+  | 'bomb' | 'boom' | 'crate' | 'pick' | 'out' | 'clue' | 'round';
 
 const KEY = 'games.sound';
 let on = true;
@@ -66,6 +66,8 @@ function hiss(at: number, time: number, cutoff: number, volume = 0.12) {
 }
 
 const SOUNDS: Record<SoundName, (t: number) => void> = {
+  clue: (t) => { note(t, 587, 587, 0.12, 'triangle', 0.06); note(t + 0.13, 880, 880, 0.2, 'triangle', 0.06); },
+  round: (t) => [440, 554, 659].forEach((f, i) => note(t + i * 0.12, f, f, 0.16, 'triangle', 0.06)),
   turn: (t) => { note(t, 660, 660, 0.09); note(t + 0.1, 880, 880, 0.16); },
   msg: (t) => note(t, 740, 880, 0.07, 'sine', 0.05),
   join: (t) => { note(t, 440, 440, 0.08, 'triangle'); note(t + 0.08, 587, 587, 0.12, 'triangle'); },

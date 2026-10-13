@@ -7,8 +7,10 @@
 // Ils créent des comptes « e2e_… » : à lancer contre une base de développement.
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
+import axe from 'axe-core';
 
 const BASE = process.env.GAMES_URL ?? 'http://localhost:3778';
+if (!/^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(BASE)) throw new Error('E2E tests require an isolated loopback instance');
 const SYSTEM = ['/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? SYSTEM, args: ['--no-sandbox'] });
 
@@ -20,7 +22,9 @@ function check(ok, what) {
 
 // Une page : un joueur. Les erreurs de la page font échouer le scénario.
 async function player({ width = 1366, height = 768, account = '' } = {}) {
-  const page = await (await browser.newContext({ viewport: { width, height }, locale: 'fr-FR' })).newPage();
+  const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR' });
+  await context.addInitScript(() => { const Native = window.WebSocket; window.WebSocket = class extends Native { constructor(...args) { super(...args); window.testSocket = this; this.addEventListener('message', e => { const data = JSON.parse(e.data); if (data.t === 'state') window.roomState = data; }); } }; });
+  const page = await context.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(String(e)));
   await page.goto(BASE + '/');
@@ -62,6 +66,347 @@ const openMenu = async (page) => {
 };
 
 const scenarios = {
+  async departSite() {
+    const { code, players: [host, guest, third] } = await room('Ono', 3);
+    await start(host);
+    const seat = await guest.evaluate(() => window.roomState.seat);
+    await guest.evaluate(() => window.testSocket.close());
+    await guest.waitForFunction(() => window.testSocket.readyState === 1);
+    check(await guest.evaluate(() => window.roomState.seat) === seat, 'une reconnexion perd la place du joueur');
+    const extra = await guest.context().newPage();
+    await extra.goto(`${BASE}/t/?code=${code}`);
+    await extra.locator('.terre').waitFor();
+    await guest.close();
+    await extra.waitForTimeout(200);
+    check(await host.evaluate(() => window.roomState.members.length) === 3, 'fermer un onglet retire le joueur encore connecté ailleurs');
+    await extra.close();
+    await host.waitForFunction(() => window.roomState.members.length === 2);
+    check(await host.evaluate(() => window.roomState.phase) === 'playing', 'les deux joueurs restants ne continuent pas');
+    await third.goto('about:blank');
+    await host.waitForFunction(() => window.roomState.members.length === 1);
+    check(await host.evaluate(() => window.roomState.void), 'un départ volontaire est compté comme une victoire normale');
+  },
+
+  async bombesMaintenues() {
+    const { players: [host] } = await room('Bombermat', 2);
+    await start(host);
+    await host.locator('.pd-count').waitFor({ state: 'detached', timeout: 8000 });
+    await host.keyboard.down('ArrowRight'); await sleep(350); await host.keyboard.up('ArrowRight');
+    await host.keyboard.down('Space'); await host.locator('.pd-bomb').waitFor();
+    const firstBomb = await host.evaluate(() => window.roomState.view.bombs[0].at);
+    await host.keyboard.down('ArrowLeft'); await sleep(350); await host.keyboard.up('ArrowLeft');
+    await host.keyboard.down('ArrowDown'); await sleep(350); await host.keyboard.up('ArrowDown');
+    await host.waitForFunction(first => window.roomState.view.bombs.some(b => b.at !== first), firstBomb, { timeout: 6000 });
+    check(await host.locator('.pd-player.me').count() > 0, 'le joueur n’a pas survécu dans son refuge');
+    await host.keyboard.up('Space');
+  },
+
+  async indicesEtEquipes() {
+    const { players } = await room('Codenoms', 4);
+    await start(players[0]);
+    await players[0].getByRole('button', { name: 'Commencer la partie', exact: true }).click();
+    for (const p of players) await p.locator('.pav-grid').waitFor();
+    const artist = (await players[0].locator('.pav-clue').count()) ? players[0] : players[1];
+    const guesser = artist === players[0] ? players[2] : players[3];
+    const currentTeam = await artist.locator('.pav-team.turn b').innerText();
+    const revealed = await artist.locator('.known .word').evaluateAll(words => new Set(words.map(el => getComputedStyle(el).backgroundColor)).size);
+    check(revealed >= 4, 'les mots des deux équipes, neutres et interdit ne sont pas assez distingués');
+    check(await guesser.locator('.pav-grid .is-babord:not(.shown), .pav-grid .is-tribord:not(.shown), .pav-grid .is-interdit:not(.shown)').count() === 0, 'la couleur révèle les mots secrets aux joueurs qui devinent');
+    await artist.locator('.pav-clue input').fill('Océan');
+    await artist.getByRole('button', { name: 'Donner l’indice', exact: true }).click();
+    for (const p of players) {
+      const dialog = p.getByRole('dialog'); await dialog.waitFor();
+      check((await dialog.innerText()).includes('Océan'), 'le popup ne montre pas l’indice reçu');
+      if (p === artist) {
+        for (const [width,height] of [[320,700],[390,844],[1366,768]]) {
+          await p.setViewportSize({width,height});
+          for (const colorScheme of ['light','dark']) {
+            await p.emulateMedia({colorScheme,reducedMotion:'reduce'});
+            await p.addScriptTag({content:axe.source});
+            const issues = await p.evaluate(async () => (await axe.run()).violations.map(v => ({id:v.id,targets:v.nodes.map(n=>n.target)})));
+            check(!issues.length, `popup indice ${width} ${colorScheme}: ${JSON.stringify(issues)}`);
+            await p.screenshot({path:`/tmp/games-codenoms-clue-${width}-${colorScheme}.png`});
+          }
+        }
+      }
+      await p.keyboard.press('Escape'); await dialog.waitFor({ state: 'detached' });
+      check((await p.locator('.clue-word').textContent()).includes('Océan'), 'l’indice disparaît après fermeture du popup');
+    }
+    for (const p of [artist,guesser]) {
+      for (const [width,height] of [[320,700],[390,844],[1366,768]]) {
+        await p.setViewportSize({width,height});
+        for (const colorScheme of ['light','dark']) {
+          await p.emulateMedia({colorScheme,reducedMotion:'reduce'});await p.addScriptTag({content:axe.source});
+          const issues = await p.evaluate(async () => (await axe.run()).violations.map(v => ({id:v.id,targets:v.nodes.map(n=>n.target)})));
+          check(!issues.length, `grille Codenoms ${width} ${colorScheme}: ${JSON.stringify(issues)}`);
+          check(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth+1), 'Codenoms déborde de l’écran');
+          await p.screenshot({path:`/tmp/games-codenoms-${p===artist?'guide':'guesser'}-${width}-${colorScheme}.png`});
+        }
+      }
+    }
+    await guesser.getByRole('button', { name: 'Revoir l’indice', exact: true }).click();
+    await guesser.getByRole('button', { name: 'Voir la grille', exact: true }).click();
+    await guesser.getByRole('button', { name: 'Passer le tour', exact: true }).click();
+    await guesser.waitForFunction(before => !document.querySelector('.pav-team.turn b').innerText.includes(before.split(' (')[0]), currentTeam);
+    await guesser.locator('.game-announcement').filter({ hasText: 'Au tour de' }).waitFor();
+    check(await guesser.getByRole('dialog').count() === 0, 'un ancien indice reste ouvert après le changement d’équipe');
+  },
+
+  async gartikManches() {
+    const { players } = await room('Gartik Phone', 3);
+    await start(players[0]);
+    for (const p of players) {
+      await p.getByRole('textbox', { name: 'Votre phrase' }).fill('Un chat sur un bateau');
+      await p.getByRole('button', { name: 'Terminé', exact: true }).click();
+    }
+    for (const p of players) {
+      await p.locator('.pad-tools').waitFor();
+      await p.locator('.game-announcement').filter({ hasText: 'Manche 2' }).waitFor();
+      await p.getByRole('button', { name: 'Couleur 4', exact: true }).click();
+      await p.getByRole('button', { name: 'Remplir', exact: true }).click();
+      await p.locator('canvas.pad').focus(); await p.keyboard.press('Space');
+      check(await p.locator('canvas.pad').evaluate(el => Array.from(el.getContext('2d').getImageData(500,375,1,1).data).slice(0,3).join() === '255,107,94'), 'le remplissage clavier ne fonctionne pas dans Gartik');
+    }
+  },
+  async onoPioche() {
+    const { players } = await room('Ono', 2);
+    for (const p of players) p.setDefaultTimeout(15000);
+    await start(players[0]);
+    for (const p of players) {
+      await p.locator('.ono-table').waitFor();
+      await p.locator('.ono-table.dealing').waitFor({ state: 'detached' });
+      await p.evaluate(() => {
+        window.onoIncoming = [];
+        document.addEventListener('animationstart', (e) => {
+          if (e.target.matches('.hand li, .ono-fly')) window.onoIncoming.push(e.animationName);
+        });
+      });
+    }
+    for (const [width, height] of [[1366, 768], [1280, 620], [390, 800]]) {
+      for (const colorScheme of ['light', 'dark']) {
+        for (const p of players) {
+          await p.setViewportSize({ width, height });
+          await p.emulateMedia({ colorScheme });
+        }
+        await sleep(1800); // Laisser finir les effets du coup précédent avant le suivant.
+        const drawer = await players[0].locator('.deck').isEnabled() ? players[0] : players[1];
+        const observer = players.find((p) => p !== drawer);
+        const before = await drawer.locator('.hand li').count();
+        const otherBefore = await observer.locator('.hand li').count();
+        for (const p of players) await p.evaluate(() => { window.onoIncoming = []; });
+        // La pioche obligatoire pulse : un vrai clic n'attend pas la fin de cette boucle.
+        await drawer.locator('.deck').click({ force: true });
+        await drawer.waitForFunction((n) => document.querySelectorAll('.hand li').length === n + 1, before);
+        await sleep(900);
+        check((await observer.locator('.hand li').count()) === otherBefore, 'la pioche change la main de l’adversaire');
+        check(JSON.stringify(await drawer.evaluate(() => window.onoIncoming)) === '["ono-deal"]', `animation de pioche doublée dans la main en ${width}×${height}, ${colorScheme}`);
+        const observed = await observer.evaluate(() => window.onoIncoming);
+        check(observed.length <= 1 && observed.every((name) => name === 'ono-draw'), `vol de pioche rejoué chez l’adversaire en ${width}×${height}, ${colorScheme} : ${JSON.stringify(observed)}`);
+        if (width === 1366) check(observed.length === 1, 'le vol vers l’adversaire a disparu sur la table ovale');
+        for (const p of players) {
+          check((await p.locator('.ono-pointer').count()) === 0, 'les trois flèches sont encore présentes');
+          check(await p.locator('.rival.turn .seat-timer').isVisible() || await p.locator('.turn-info .timer').isVisible(), `la jauge a disparu en ${width}×${height}, ${colorScheme}`);
+          const ring = await p.locator('.rival.turn .rival-who').evaluate((e) => getComputedStyle(e, '::before').backgroundImage);
+          check(ring.includes('conic-gradient'), 'le cercle de tour a disparu');
+          check((await p.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, 'la table déborde en largeur');
+        }
+        const keep = drawer.getByRole('button', { name: /Garder la carte/ });
+        if (await keep.count()) await keep.click();
+      }
+    }
+    for (const p of players) await p.emulateMedia({ reducedMotion: 'reduce' });
+    await sleep(1800);
+    const drawer = await players[0].locator('.deck').isEnabled() ? players[0] : players[1];
+    const before = await drawer.locator('.hand li').count();
+    for (const p of players) await p.evaluate(() => { window.onoIncoming = []; });
+    await drawer.locator('.deck').click({ force: true });
+    await drawer.waitForFunction((n) => document.querySelectorAll('.hand li').length === n + 1, before);
+    await sleep(900);
+    for (const p of players) check((await p.evaluate(() => window.onoIncoming.length)) === 0, 'la pioche ignore la réduction des animations');
+  },
+
+  async skribouille() {
+    const { code, players } = await room('Skribouille', 2);
+    const [host] = players;
+    await start(host);
+    for (const p of players) await p.locator('.sk-choose').waitFor();
+    const artist = (await players[0].locator('.sk-choose button').count()) ? players[0] : players[1];
+    const guesser = players.find((p) => p !== artist);
+    const choice = artist.locator('.sk-choose button').first();
+    const word = await choice.innerText();
+    await choice.click();
+    await artist.locator('.pad-tools').waitFor();
+    const pixel = async (page, rgb, x = 500, y = 375) => page.waitForFunction(({ rgb, x, y }) => {
+      const ctx = document.querySelector('canvas.pad')?.getContext('2d');
+      return ctx && Array.from(ctx.getImageData(x, y, 1, 1).data).slice(0, 3).join() === rgb.join();
+    }, { rgb, x, y });
+    const draw = async (points) => {
+      const r = await artist.locator('canvas.pad').boundingBox();
+      await artist.mouse.move(r.x + r.width * points[0][0], r.y + r.height * points[0][1]);
+      await artist.mouse.down();
+      for (const [x, y] of points.slice(1)) await artist.mouse.move(r.x + r.width * x, r.y + r.height * y, { steps: 6 });
+      await artist.mouse.up();
+    };
+    const center = () => artist.locator('canvas.pad').click();
+    await draw([[.25, .25], [.75, .25], [.75, .75], [.25, .75], [.25, .25]]);
+    await artist.getByRole('button', { name: 'Couleur 4', exact: true }).click();
+    await artist.getByRole('button', { name: 'Remplir', exact: true }).click();
+    await center();
+    for (const p of players) {
+      await pixel(p, [255, 107, 94]);
+      await pixel(p, [255, 255, 255], 100, 100);
+    }
+    await artist.getByRole('button', { name: 'Couleur 9', exact: true }).click();
+    await center();
+    await pixel(guesser, [20, 67, 214]);
+    await artist.locator('.pad-tools').getByRole('button', { name: 'Annuler', exact: true }).click();
+    await pixel(guesser, [255, 107, 94]);
+    await artist.locator('.pad-tools').getByRole('button', { name: 'Annuler', exact: true }).click();
+    await pixel(guesser, [255, 255, 255]);
+    await artist.getByRole('button', { name: 'Couleur 4', exact: true }).click();
+    await center();
+    await pixel(guesser, [255, 107, 94]);
+    await artist.evaluate(() => window.testSocket.close()); await artist.waitForFunction(() => window.testSocket.readyState === 1);
+    await artist.locator('.pad-tools').waitFor();
+    await pixel(artist, [255, 107, 94]);
+    await artist.getByRole('button', { name: 'Crayon', exact: true }).click();
+    await artist.getByRole('button', { name: 'Couleur 1', exact: true }).click();
+    await draw([[.1, .1], [.2, .1]]);
+    await pixel(guesser, [17, 23, 48], 150, 75);
+    await pixel(guesser, [255, 107, 94]);
+    const watcher = await player();
+    await watcher.evaluate(() => localStorage.setItem('games.lang', 'en'));
+    await watcher.goto(`${BASE}/t/?code=${code}`);
+    await pixel(watcher, [255, 107, 94]);
+    check((await watcher.locator('.pad-tools').count()) === 0, 'un spectateur voit les outils');
+    check((await guesser.locator('.pad-tools').count()) === 0, 'le joueur qui devine voit les outils');
+    for (const [width, height] of [[1366, 768], [1280, 620], [390, 844]]) {
+      await artist.setViewportSize({ width, height });
+      for (const colorScheme of ['light', 'dark']) {
+        await artist.emulateMedia({ colorScheme });
+        await artist.getByRole('button', { name: 'Remplir', exact: true }).click({ trial: true });
+        check(await artist.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'les outils débordent de l’écran');
+        await artist.screenshot({ path: `/tmp/games-skrib-draw-${width}-${colorScheme}.png` });
+      }
+    }
+    await artist.setViewportSize({ width: 1366, height: 768 });
+    await artist.getByRole('button', { name: 'Tout effacer', exact: true }).click();
+    await pixel(guesser, [255, 255, 255]);
+    await artist.getByRole('button', { name: 'Couleur 4', exact: true }).click();
+    await artist.getByRole('button', { name: 'Remplir', exact: true }).click();
+    await center();
+    await pixel(guesser, [255, 107, 94]);
+    await pixel(guesser, [255, 107, 94], 100, 100);
+    await artist.locator('.pad-tools').getByRole('button', { name: 'Annuler', exact: true }).click();
+    await pixel(guesser, [255, 255, 255]);
+    await guesser.locator('.sk-guess input').fill(word);
+    await guesser.locator('.sk-guess button').click();
+    for (const p of players) {
+      await p.getByRole('heading', { name: 'Fin de manche', exact: true }).waitFor();
+      check(await p.locator('.sk-reveal-card > strong').innerText() === word, 'le résultat ne révèle pas le mot');
+      check((await p.locator('.pad-tools').count()) === 0, 'les outils restent ouverts pendant le résultat');
+    }
+    await watcher.getByRole('heading', { name: 'Round over', exact: true }).waitFor();
+    check(await artist.locator('.sk-reveal-card').innerText().then((s) => s.includes('+20 points gagnés')), 'les points du dessinateur ne sont pas affichés');
+    for (const [width, height] of [[1366, 768], [1280, 620], [390, 844]]) {
+      await guesser.setViewportSize({ width, height });
+      for (const colorScheme of ['light', 'dark']) {
+        await guesser.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+        check(await guesser.locator('.sk-reveal-card').evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return r.x >= 0 && r.right <= innerWidth + 1 && r.y >= 0 && r.bottom <= innerHeight;
+        }), 'le résultat sort de l’écran');
+        await guesser.screenshot({ path: `/tmp/games-skrib-result-${width}-${colorScheme}.png` });
+      }
+    }
+    for (const p of players) {
+      await p.locator('.sk-reveal').waitFor({ state: 'detached', timeout: 8000 });
+      await p.locator('.sk-choose').waitFor();
+    }
+    check((await guesser.locator('.sk-choose button').count()) === 3, 'la manche suivante ne change pas de dessinateur');
+  },
+
+  async nomDeCode() {
+    const { players: [host, guest, third, fourth] } = await room('Codenoms', 4);
+    for (const p of [host, guest, third, fourth]) p.setDefaultTimeout(15000);
+    check((await guest.getByRole('button', { name: 'Lancer la partie', exact: true }).count()) === 0, 'un invité peut lancer depuis le salon');
+    await start(host);
+    for (const p of [host, guest, third, fourth]) await p.locator('.pav-teams').waitFor();
+
+    await guest.locator('.pav-teams').waitFor();
+    for (const p of [guest, third, fourth]) {
+      check((await p.getByRole('button', { name: 'Commencer la partie', exact: true }).count()) === 0, 'un invité peut commencer après le choix des équipes');
+      await p.getByText(/l’hôte, commencera la partie/).waitFor();
+    }
+    await guest.evaluate(() => window.testSocket.send(JSON.stringify({ t: 'act', a: { t: 'begin' } })));
+    await guest.getByText("Seul l'hôte lance la partie", { exact: true }).waitFor();
+    check(await host.locator('.pav-teams').isVisible(), 'la requête de l’invité a lancé la grille');
+    await third.getByRole('button', { name: 'Donner les indices ici', exact: true }).first().click();
+    await host.waitForFunction(() => document.querySelector('.pav-begin button')?.disabled);
+    await third.getByRole('button', { name: 'Deviner ici', exact: true }).first().click();
+    await host.waitForFunction(() => document.querySelector('.pav-begin button')?.disabled === false);
+    await host.getByRole('button', { name: 'Commencer la partie', exact: true }).click();
+    for (const p of [host, guest, third, fourth]) await p.locator('.pav-grid .word').first().waitFor();
+  },
+
+  async finBombermat() {
+    const { code, players: [host, guest] } = await room('Bombermat', 2);
+    const finish = async () => {
+      await host.locator('.pd-count').waitFor({ state: 'detached', timeout: 8000 });
+      await host.keyboard.press('Space');
+      await host.locator('.outcome').waitFor({ timeout: 6000 });
+      await guest.locator('.outcome-card strong', { hasText: 'Victoire explosive !' }).waitFor();
+    };
+    await start(host);
+    await finish();
+    check((await host.locator('.outcome-card strong').innerText()).includes('remporte la partie'), 'le perdant ne voit pas le gagnant');
+    for (const [width, height] of [[1366, 768], [1280, 620], [390, 800]]) {
+      await guest.setViewportSize({ width, height });
+      for (const colorScheme of ['light', 'dark']) {
+        await guest.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+        await guest.locator('.outcome-card strong').scrollIntoViewIfNeeded();
+        const front = await guest.evaluate(() => {
+          const title = document.querySelector('.outcome-card strong');
+          const r = title.getBoundingClientRect();
+          const grid = document.querySelector('.pd-grid').getBoundingClientRect();
+          const pawn = document.querySelector('.pd-player');
+          // Le survivant reste au fond de l'arène (z-index élevé). On le place sous le
+          // titre pour vérifier que sa couche ne peut jamais recouvrir le résultat.
+          pawn.style.transform = `translate(${r.x + r.width / 2 - grid.x}px, ${r.y + r.height / 2 - grid.y}px)`;
+          return !!document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)?.closest('.outcome-card');
+        });
+        check(front, `le pion passe devant le résultat en ${width}×${height}, ${colorScheme}`);
+        check((await guest.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 1, 'le résultat déborde en largeur');
+        const back = guest.getByRole('button', { name: 'Retour au salon', exact: true });
+        await back.scrollIntoViewIfNeeded();
+        await back.click({ trial: true });
+      }
+    }
+    await guest.setViewportSize({ width: 1366, height: 768 });
+    await guest.getByRole('button', { name: 'Retour au salon', exact: true }).click();
+    await guest.locator('.lobby').waitFor();
+    check(new URL(guest.url()).searchParams.get('code') === code, 'le retour quitte le salon');
+    check(await host.locator('.outcome').isVisible(), 'le retour d’un joueur ferme le résultat de l’hôte');
+    const vote = guest.locator('.pick-game', { hasText: 'Ono' });
+    await vote.click();
+    await guest.locator('.pick-game.voted', { hasText: 'Ono' }).waitFor();
+    const watcher = await player();
+    await watcher.goto(`${BASE}/t/?code=${code}`);
+    await watcher.locator('.outcome').waitFor();
+    await watcher.getByRole('button', { name: 'Retour au salon', exact: true }).click();
+    await watcher.locator('.lobby').waitFor();
+    await watcher.getByRole('button', { name: 'Quitter le salon', exact: true }).click();
+    await watcher.waitForURL(BASE + '/');
+    await host.getByRole('button', { name: 'Rejouer', exact: true }).click();
+    await guest.locator('.pd-count').waitFor();
+    await guest.locator('.lobby').waitFor({ state: 'detached' });
+    await finish();
+    await host.getByRole('button', { name: 'Retour au salon', exact: true }).click();
+    await host.locator('.lobby').waitFor();
+    await guest.locator('.lobby').waitFor();
+    check(await guest.locator('#lobby-crew-title', { hasText: '2 joueurs' }).isVisible(), 'le retour de l’hôte perd un joueur');
+  },
+
   // Le code reste entier dans la bande ; le menu mobile garde navigation et compte accessibles.
   async navigation() {
     const { code, players: [p] } = await room('Ono', 1);
@@ -399,7 +744,7 @@ for (const name of names) {
     console.log(`ok    ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
   } catch (err) {
     failed++;
-    const at = String(err.stack).split('\n').find((line) => line.includes('run.mjs:'))?.trim() ?? '';
+    const at = String(err.stack).split('\n').findLast((line) => line.includes('run.mjs:'))?.trim() ?? '';
     console.log(`ÉCHEC ${name} : ${String(err.message).split('\n')[0]} ${at}`);
   }
   for (const c of browser.contexts().slice(before)) await c.close();

@@ -236,25 +236,6 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
   }, []);
   const dealAt = (seat: number, k: number) => `${Math.round((k * n + seat) * gap)}ms`;
 
-  // À qui le tour : une flèche part du tas vers sa place. La table n'est pas carrée ; son
-  // angle se calcule sur ses vraies proportions.
-  const tableBox = useRef<HTMLDivElement>(null);
-  const [shape, setShape] = useState(2);
-  useEffect(() => {
-    const el = tableBox.current;
-    if (!el) return;
-    const read = () => el.clientHeight > 0 && setShape(el.clientWidth / el.clientHeight);
-    read();
-    const watch = new ResizeObserver(read);
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, []);
-  const toward = place(v.turn);
-  const pointer = {
-    '--x': `${50 + (toward.x - 50) * 0.5}%`,
-    '--y': `${52 + (toward.y - 52) * 0.5}%`,
-    '--a': `${(Math.atan2(toward.y - 52, (toward.x - 50) * shape) * 180) / Math.PI}deg`,
-  } as CSSProperties;
   // « À vous ! » : annoncé en grand, un instant, chaque fois que le tour vous revient.
   const [yours, setYours] = useState(0);
   useEffect(() => {
@@ -315,9 +296,8 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
   return (
     <div className="terre">
       {guide}
-      <div className={`ono-table${dealing ? ' dealing' : ''}${v.winner < 0 && !dealing ? ' has-turn' : ''}`} ref={tableBox} style={{ '--deal-end': `${Math.round(dealTime)}ms` } as CSSProperties}>
+      <div className={`ono-table${dealing ? ' dealing' : ''}${v.winner < 0 && !dealing ? ' has-turn' : ''}`} style={{ '--deal-end': `${Math.round(dealTime)}ms` } as CSSProperties}>
       <div className={`ono-top glow-${v.color}`} aria-hidden="true" />
-      {v.winner < 0 && !dealing && <span className="ono-pointer" style={pointer} aria-hidden="true"><i /><i /><i /></span>}
       <ul className="rivals">
         {others.map((seat) => {
           const shown = Math.min(v.counts[seat], 7);
@@ -382,7 +362,8 @@ export default function TerreStage({ st, skew, act }: StageProps<View>) {
 
       {/* Les effets du dernier coup. Purement visuels : le récit sous la table dit la même chose. */}
       <div className="ono-fx" aria-hidden="true" key={fx.id}>
-        {fx.flights.flatMap((f) => Array.from({ length: Math.min(f.n, 4) }, (_, k) => <span key={`${f.seat}-${k}`} className="ono-fly card card-back" style={at(f.seat, { '--d': `${k * 110}ms` })} />))}
+        {/* Notre carte entre déjà dans notre main : les dos en vol sont réservés aux autres places. */}
+        {fx.flights.filter((f) => f.seat !== me).flatMap((f) => Array.from({ length: Math.min(f.n, 4) }, (_, k) => <span key={`${f.seat}-${k}`} className="ono-fly card card-back" style={at(f.seat, { '--d': `${k * 110}ms` })} />))}
         {fx.badges.map((b) => <b key={`${b.seat}-${b.text}`} className="ono-badge" style={at(b.seat)}>{b.text}</b>)}
         {fx.call && <span className={`ono-burst glow-${v.color}`} />}
         {yours > 0 && <b className="ono-yours" key={`yours-${yours}`}>{t('À vous !', 'Your turn!')}</b>}

@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { useT } from '@/lib/app';
+import { App, useT } from '@/lib/app';
+import { Ic } from '@/components/ui';
 import { PALETTE, SHEET, encode, paint, type Stroke } from '@/lib/sketch';
 
 // La feuille de dessin. Sans `act`, elle montre le dessin reçu. Avec, le joueur dessine :
 // ses traits s'affichent tout de suite et partent au serveur par petits paquets ; `k`
 // change quand une nouvelle feuille commence.
-export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (action: object) => void; k: string }) {
+export default function Pad({ strokes, act, k, allowFill = true }: { strokes: Stroke[]; act?: (action: object) => void; k: string; allowFill?: boolean }) {
   const t = useT();
   const help = useId();
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -16,6 +17,7 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
   const last = useRef<[number, number] | null>(null);
   const [color, setColor] = useState(0);
   const [width, setWidth] = useState(1);
+  const [tool, setTool] = useState<'pen' | 'fill'>('pen');
   const cursor = useRef<[number, number]>([500, 500]);
   const [keyboard, setKeyboard] = useState(false);
   const [position, setPosition] = useState<[number, number]>([500, 500]);
@@ -58,13 +60,26 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
     const r = canvas.current!.getBoundingClientRect();
     return [((e.clientX - r.left) / r.width) * 1000, ((e.clientY - r.top) / r.height) * 1000] as [number, number];
   };
+  const fillAt = (x: number, y: number) => {
+    if (!act || !allowFill) return;
+    up();
+    if (mine.current.filter((s) => s.f).length >= 32 || mine.current.length >= 600 || mine.current.reduce((n, s) => n + s.p.length / 4, 0) >= 9000) {
+      App.toast(t('Le dessin est plein : annulez ou effacez pour continuer.', 'The drawing is full: undo or clear to continue.'));
+      return;
+    }
+    const p = encode(x, y);
+    mine.current.push({ c: color, w: 0, p, f: true });
+    act({ t: 'fill', c: color, p });
+    redraw(mine.current);
+  };
   const down = (e: React.PointerEvent) => {
     if (!act || e.button > 0) return;
     e.preventDefault();
     up();
     setKeyboard(false);
-    canvas.current!.setPointerCapture(e.pointerId);
     const [x, y] = at(e);
+    if (tool === 'fill' && allowFill) { fillAt(x, y); return; }
+    canvas.current!.setPointerCapture(e.pointerId);
     last.current = [x, y];
     const p = encode(x, y);
     mine.current.push({ c: color, w: width, p });
@@ -106,6 +121,7 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
       e.preventDefault();
       if (e.repeat) return;
       setKeyboard(true);
+      if (tool === 'fill' && allowFill) { fillAt(...cursor.current); return; }
       if (last.current) up();
       else {
         const [x, y] = cursor.current;
@@ -140,7 +156,7 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
         <div className="pad-sheet">
         <canvas
           ref={canvas}
-          className={`pad${drawing ? ' live' : ''}`}
+          className={`pad${drawing ? ' live' : ''}${drawing && allowFill && tool === 'fill' ? ' filling' : ''}`}
           width={SHEET.w}
           height={SHEET.h}
           onPointerDown={down}
@@ -161,6 +177,10 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
       )}
       {drawing && (
         <div className="pad-tools">
+          {allowFill && <div className="pad-modes" role="group" aria-label={t('Outil de dessin', 'Drawing tool')}>
+            <button className="btn onsea small" aria-pressed={tool === 'pen'} onClick={() => { up(); setTool('pen'); }}><Ic name="pencil" />{t('Crayon', 'Pencil')}</button>
+            <button className="btn onsea small" aria-pressed={tool === 'fill'} onClick={() => { up(); setTool('fill'); }}><Ic name="bucket" />{t('Remplir', 'Fill')}</button>
+          </div>}
           <div className="pad-colors" role="group" aria-label={t('Couleur', 'Colour')}>
             {PALETTE.map((hex, i) => (
               <button key={hex} aria-pressed={color === i} aria-label={t(`Couleur ${i + 1}`, `Colour ${i + 1}`)} className={color === i ? 'on' : undefined} style={{ background: hex }} onClick={() => setColor(i)} />
@@ -173,7 +193,7 @@ export default function Pad({ strokes, act, k }: { strokes: Stroke[]; act?: (act
               </button>
             ))}
           </div>
-          <button className="btn onsea small" onClick={undo}>{t('Annuler le trait', 'Undo stroke')}</button>
+          <button className="btn onsea small" onClick={undo}>{t('Annuler', 'Undo')}</button>
           <button className="btn onsea small" onClick={clear}>{t('Tout effacer', 'Clear all')}</button>
         </div>
       )}

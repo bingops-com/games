@@ -16,6 +16,7 @@ jobs:
   test:
     name: Build and test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -54,13 +55,28 @@ jobs:
         working-directory: web
         run: npm audit --package-lock-only --audit-level=high
 
+      - name: Install browser for regression checks
+        working-directory: web
+        run: npx --no-install playwright-core install --with-deps chromium
+
+      - name: Locate test browser
+        working-directory: web
+        run: node --input-type=module -e 'import { chromium } from "playwright-core"; console.log("CHROMIUM=" + chromium.executablePath())' >> "$GITHUB_ENV"
+
       - name: Vet and typecheck
         run: |
           go vet ./...
           cd web && npm run typecheck
 
       - name: Test
+        env:
+          GAMES_ADMIN_BROWSER_CHECK: 'true'
         run: go test -race ./...
+
+      - name: Browser regressions and accessibility
+        env:
+          GAMES_DATABASE_URL: postgres://games:games@127.0.0.1:5432/games
+        run: bash web/e2e/check.sh
 
       - name: Check reachable Go vulnerabilities
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

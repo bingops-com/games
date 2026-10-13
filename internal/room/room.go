@@ -510,6 +510,28 @@ func (c *Client) Close() {
 	r.broadcast()
 }
 
+// Depart is an intentional browser departure, not a temporary network loss.
+// Another tab of the same player keeps their seat. Repeating this is harmless.
+func (c *Client) Depart() {
+	r := c.room
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if c.gone {
+		return
+	}
+	r.depart(c, time.Now())
+	r.broadcast()
+}
+
+func (r *Room) depart(c *Client, now time.Time) {
+	if m := r.member(c.id); m != nil && m.conns == 1 {
+		r.expel(m, "left", now)
+	} else {
+		r.drop(c)
+	}
+	r.dirty = true
+}
+
 // drop accounts for every disconnection, including a full send queue. The
 // caller holds the room lock; broadcasting happens after the current send.
 func (r *Room) drop(c *Client) bool {
@@ -858,6 +880,8 @@ func (r *Room) handle(c *Client, msg message) error {
 		r.toLobby()
 	case "leave":
 		r.expel(m, "left", now)
+	case "depart":
+		r.depart(c, now)
 	case "kick":
 		if !host {
 			return Error("Seul l'hôte retire un joueur")

@@ -189,6 +189,9 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
   const pred = useRef<Pos | null>(null);
   const pawn = useRef<HTMLSpanElement>(null);
   const stuck = useRef(0);
+  // Espace (ou le bouton) tenu : les bombes se posent à la chaîne, sans marteler la touche.
+  const dropping = useRef(false);
+  const dropped = useRef(0);
   const live = useRef(v);
   live.current = v;
 
@@ -216,6 +219,16 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
           return !now.bombs.some((b) => b.c === y * now.w + x) || (Math.abs(p.x - x) < 1 - EPS && Math.abs(p.y - y) < 1 - EPS);
         });
       }
+      // Tant que la pose est tenue, on redemande une bombe dès que la case où l'on se tient
+      // n'en porte pas : le serveur la pose s'il en reste une en main. Huit demandes par
+      // seconde au plus, loin de ce que la connexion accepte.
+      if (dropping.current && self?.alive && pred.current && at - dropped.current > 120) {
+        const cell = Math.round(pred.current.y) * now.w + Math.round(pred.current.x);
+        if (!now.bombs.some((b) => b.c === cell)) {
+          dropped.current = at;
+          act({ t: 'bomb' });
+        }
+      }
       if (pawn.current && pred.current) pawn.current.style.transform = `translate(${pred.current.x * 100}%, ${pred.current.y * 100}%)`;
       raf = requestAnimationFrame(frame);
     };
@@ -225,7 +238,11 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
-        if (!e.repeat) act({ t: 'bomb' });
+        if (!e.repeat) {
+          dropping.current = true;
+          dropped.current = performance.now();
+          act({ t: 'bomb' });
+        }
         return;
       }
       const d = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
@@ -236,12 +253,14 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       sendDir();
     };
     const up = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Enter') dropping.current = false;
       const d = KEYS[e.key] ?? KEYS[e.key.toLowerCase()];
       if (!d || !held.current.includes(d)) return;
       held.current = held.current.filter((x) => x !== d);
       sendDir();
     };
     const blur = () => {
+      dropping.current = false;
       held.current = [];
       sendDir();
     };
@@ -253,6 +272,7 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', blur);
       cancelAnimationFrame(raf);
+      dropping.current = false;
       held.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -356,7 +376,7 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
       </Guide>
     );
   } else if (ready > 0 && mine) {
-    guide = <Guide tone="alert" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{t(`Vous êtes l’avatar cerclé de menthe, ${corner}. Flèches ou ZQSD pour bouger, Espace pour poser une bombe.`, `You are the piece ringed in mint, ${corner}. Arrow keys or WASD to move, Space to lay a bomb.`)}</Guide>;
+    guide = <Guide tone="alert" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{t(`Vous êtes l’avatar cerclé de menthe, ${corner}. Flèches ou ZQSD pour bouger, Espace pour poser une bombe (tenez-la pour en poser à la chaîne).`, `You are the piece ringed in mint, ${corner}. Arrow keys or WASD to move, Space to lay a bomb (hold it to lay them in a row).`)}</Guide>;
   } else if (ready > 0) {
     guide = <Guide tone="wait" title={t(`Départ dans ${ready}`, `Starting in ${ready}`)}>{watching}</Guide>;
   } else if (mine && !mine.alive) {
@@ -451,7 +471,13 @@ export default function PoudriereStage({ st, skew, act }: StageProps<View>) {
             <button className="pd-r" aria-label={t('Droite', 'Right')} {...pad('r')}><Ic name="right" /></button>
             <button className="pd-d" aria-label={t('Bas', 'Down')} {...pad('d')}><Ic name="down" /></button>
           </div>
-          <button className="btn white pd-drop" onPointerDown={(e) => { e.preventDefault(); act({ t: 'bomb' }); }}>{t('Poser une bombe', 'Lay a bomb')}</button>
+          <button
+            className="btn white pd-drop"
+            onPointerDown={(e) => { e.preventDefault(); dropping.current = true; dropped.current = performance.now(); act({ t: 'bomb' }); }}
+            onPointerUp={() => { dropping.current = false; }}
+            onPointerLeave={() => { dropping.current = false; }}
+            onPointerCancel={() => { dropping.current = false; }}
+          >{t('Poser une bombe', 'Lay a bomb')}</button>
         </div>
       )}
     </div>

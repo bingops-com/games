@@ -21,6 +21,7 @@ import PavillonsStage from '@/stages/PavillonsStage';
 import PoudriereStage from '@/stages/PoudriereStage';
 import SkribStage from '@/stages/SkribStage';
 import TerreStage from '@/stages/TerreStage';
+import GameAnnouncement from '@/stages/GameAnnouncement';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const STAGES: Record<string, ComponentType<StageProps<any>>> = {
@@ -129,7 +130,7 @@ function Band({ st, link, report }: { st: TableState; link: TableLink; report: (
   const n = st.members.length;
   return (
     <div className={`room${open ? ' open' : ''}${playing ? '' : ' waiting'}`}>
-      <button className="room-code" onClick={() => App.copy(roomLink(st.code), t('Lien d’invitation copié', 'Invitation link copied'))} aria-label={t(`Salon ${st.code}, copier le lien d'invitation`, `Room ${st.code}, copy the invitation link`)}>
+      <button className="room-code" onClick={() => App.copy(roomLink(st.code), t('Lien d’invitation copié', 'Invitation link copied'))} title={t('Copier le lien d’invitation', 'Copy invitation link')}>
         <small>{t('Salon', 'Room')}</small>
         <strong>{st.code}</strong>
         <span><Ic name="link" />{t('Copier le lien d’invitation', 'Copy invitation link')}</span>
@@ -321,16 +322,20 @@ function result(st: TableState, game: Game, t: T) {
   // Un jeu sans gagnant : on a joué pour rire.
   if (game.noWinner) return t('C’est fini !', 'That’s all!');
   const winners = st.members.filter((m) => m.seat >= 0 && st.winners?.includes(m.seat));
-  if (winners.length === 0) return t('Personne ne gagne', 'Nobody wins');
-  if (winners.some((m) => m.id === st.you)) return winners.length > 1 ? t('Votre équipe gagne !', 'Your team wins!') : t('Vous gagnez !', 'You win!');
+  if (winners.length === 0) return t('Match nul !', 'It’s a draw!');
+  if (winners.some((m) => m.id === st.you)) {
+    if (game.id === 'poudriere') return t('Victoire explosive !', 'An explosive victory!');
+    return winners.length > 1 ? t('Victoire d’équipe !', 'Team victory!') : t('Victoire !', 'Victory!');
+  }
   const names = winners.map((m) => m.name).join(', ');
-  return winners.length > 1 ? t(`${names} gagnent`, `${names} win`) : t(`${names} gagne`, `${names} wins`);
+  return winners.length > 1 ? t(`${names} remportent la partie !`, `${names} win the game!`) : t(`${names} remporte la partie !`, `${names} wins the game!`);
 }
 
 function Room({ link, game }: { link: TableLink; game: Game }) {
   const t = useT();
   const { full } = useApp();
   const [rules, setRules] = useState(false);
+  const [returnedToLobby, setReturnedToLobby] = useState(false);
   // Arrêter la partie se confirme : elle ne compterait pour personne.
   const [stopping, setStopping] = useState(false);
   const [reported, setReported] = useState<Member | null>(null);
@@ -338,10 +343,22 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
   const Stage = STAGES[game.id];
   const host = st.host === st.you;
   const hostName = st.members.find((m) => m.id === st.host)?.name ?? '';
-  const playing = st.phase !== 'lobby';
   // Une partie finie change ce que le joueur a accompli : on relit son compte, le temps que
   // le serveur l'ait compté.
   const over = st.phase === 'over';
+  // Chacun peut retrouver le vote après le résultat. Seul l'hôte change l'état du salon ;
+  // les autres affichent son attente localement et rejoignent la prochaine partie en direct.
+  const showingLobby = st.phase === 'lobby' || (over && returnedToLobby);
+  const playing = !showingLobby;
+  const displayedState: TableState = showingLobby && over ? { ...st, phase: 'lobby' } : st;
+  useEffect(() => {
+    if (!over) setReturnedToLobby(false);
+  }, [over]);
+  const returnToLobby = () => {
+    if (host) link.send({ t: 'lobby' });
+    else setReturnedToLobby(true);
+    App.setFull(false);
+  };
   useEffect(() => {
     if (!over) return;
     const id = setTimeout(() => void App.refresh(), 1200);
@@ -368,7 +385,7 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
   }, [full]);
   return (
     <div className="play">
-      <InBand><Band st={st} link={link} report={setReported} /></InBand>
+      <InBand><Band st={displayedState} link={link} report={setReported} /></InBand>
       <section className={`sea board board-${playing ? game.id : 'lobby'}`} aria-label={playing ? game.name : t('Salon', 'Room')}>
         <div className="board-bar">
           {playing ? <h1>{game.name}</h1> : <b>{t(`Salon ${st.code}`, `Room ${st.code}`)}</b>}
@@ -380,21 +397,26 @@ function Room({ link, game }: { link: TableLink; game: Game }) {
             <button className="btn onsea small" aria-pressed={full} onClick={() => App.setFull(!full)}><Ic name={full ? 'shrink' : 'expand'} />{full ? t('Quitter la pleine fenêtre', 'Exit full window') : t('Pleine fenêtre', 'Full window')}</button>
           </span>
         </div>
-        {playing ? <Stage st={st} skew={link.skew} act={link.act} /> : <Lobby st={st} game={game} link={link} rules={() => setRules(true)} report={setReported} />}
-        {st.phase === 'over' && (
+        {playing ? <Stage st={st} skew={link.skew} act={link.act} /> : <Lobby st={displayedState} game={game} link={link} rules={() => setRules(true)} report={setReported} />}
+        {st.phase === 'playing' && !['skrib', 'gartik', 'pavillons'].includes(game.id) && <GameAnnouncement event={`${st.game}:${st.played}`} initial title={t('Nouvelle partie !', 'New game!')} detail={game.name} sound="round" />}
+        {over && !showingLobby && (
           <div className="outcome" role="status">
             <div className="outcome-card light">
               <GameCover id={game.id} />
-              <strong>{result(st, game, t)}</strong>
+              <p className="outcome-label">{t('Partie terminée', 'Game over')}</p>
+              <h2><strong>{result(st, game, t)}</strong></h2>
+              {game.id === 'poudriere' && <p className="outcome-recap">{st.winners?.length === 0
+                ? t('L’arène n’a épargné personne. Prenez votre revanche !', 'The arena spared nobody. Time for a rematch!')
+                : won
+                  ? t('Dernier debout. Cette manche est à vous !', 'Last one standing. This round is yours!')
+                  : t('L’arène a son champion. La prochaine manche vous attend !', 'The arena has its champion. The next round awaits!')}</p>}
+              <p className="outcome-next">{t('Retournez au salon pour voter pour le prochain jeu ou patienter ensemble.', 'Head back to the room to vote for the next game or wait together.')}</p>
               <After played={st.seat >= 0} voided={st.void} />
-              {host ? (
-                <div className="row-actions">
-                  <button className="btn primary big" onClick={() => link.send({ t: 'start' })}><Ic name="again" />{t('Rejouer', 'Play again')}</button>
-                  <button className="btn quiet" onClick={() => link.send({ t: 'lobby' })}><Ic name="home" />{t('Changer de jeu', 'Change game')}</button>
-                </div>
-              ) : (
-                <p>{t(`${hostName} relance une partie ou change de jeu.`, `${hostName} starts another game or changes game.`)}</p>
-              )}
+              <div className="row-actions">
+                <button className="btn primary big" autoFocus onClick={returnToLobby}><Ic name="home" />{t('Retour au salon', 'Back to the room')}</button>
+                {host && <button className="btn quiet" onClick={() => link.send({ t: 'start' })}><Ic name="again" />{t('Rejouer', 'Play again')}</button>}
+              </div>
+              {!host && <p className="outcome-next">{t(`${hostName} lancera la prochaine partie.`, `${hostName} will start the next game.`)}</p>}
             </div>
           </div>
         )}

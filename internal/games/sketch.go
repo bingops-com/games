@@ -11,12 +11,14 @@ const (
 	sketchColors  = 12
 	sketchStrokes = 600
 	sketchPoints  = 9000
+	sketchFills   = 32 // bound raster replay work on every player's browser
 )
 
 type stroke struct {
 	C int    `json:"c"` // colour, an index in the page's palette
 	W int    `json:"w"` // width: 0 fine, 1 medium, 2 thick
 	P string `json:"p"`
+	F bool   `json:"f,omitempty"` // a flood fill at the single encoded point
 }
 
 type sketch struct {
@@ -55,14 +57,28 @@ func (s *sketch) act(t string, action json.RawMessage) (ok bool, err error) {
 		P string `json:"p"`
 	}
 	switch t {
-	case "begin", "more":
+	case "begin", "more", "fill":
 		if json.Unmarshal(action, &a) != nil || !validPoints(a.P) {
 			return true, Error("Trait illisible")
 		}
 		if s.points+len(a.P)/4 > sketchPoints {
 			return true, Error("Le dessin est plein : effacez pour continuer")
 		}
-		if t == "begin" {
+		if t == "fill" {
+			fills := 0
+			for _, stroke := range s.strokes {
+				if stroke.F {
+					fills++
+				}
+			}
+			if len(a.P) != 4 || a.C < 0 || a.C >= sketchColors {
+				return true, Error("Trait illisible")
+			}
+			if fills >= sketchFills || len(s.strokes) >= sketchStrokes {
+				return true, Error("Le dessin est plein : effacez pour continuer")
+			}
+			s.strokes = append(s.strokes, stroke{C: a.C, P: a.P, F: true})
+		} else if t == "begin" {
 			if a.C < 0 || a.C >= sketchColors || a.W < 0 || a.W > 2 || len(s.strokes) >= sketchStrokes {
 				return true, Error("Le dessin est plein : effacez pour continuer")
 			}
@@ -70,6 +86,9 @@ func (s *sketch) act(t string, action json.RawMessage) (ok bool, err error) {
 		} else {
 			if len(s.strokes) == 0 {
 				return true, nil
+			}
+			if s.strokes[len(s.strokes)-1].F {
+				return true, Error("Trait illisible")
 			}
 			s.strokes[len(s.strokes)-1].P += a.P
 		}

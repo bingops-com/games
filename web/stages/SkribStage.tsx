@@ -7,6 +7,7 @@ import { Avatar } from '@/lib/avatar';
 import type { Stroke } from '@/lib/sketch';
 import { avatarAt, nameAt, useNow, type StageProps } from '@/lib/table';
 import Guide from './Guide';
+import GameAnnouncement from './GameAnnouncement';
 import Pad from './Pad';
 
 interface Line {
@@ -66,7 +67,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
 
   let guide;
   if (v.phase === 'over') guide = <Guide tone="wait" title={t('La partie est finie', 'The game is over')} />;
-  else if (v.phase === 'reveal') guide = <Guide tone="alert" title={t(`Le mot était « ${v.word} »`, `The word was "${v.word}"`)}>{t('Les points du tour s’ajoutent aux scores.', 'The points of the turn are added to the scores.')}</Guide>;
+  else if (v.phase === 'reveal') guide = <Guide tone="alert" title={t('Fin de manche', 'Round over')}>{t('Le mot est révélé et les points sont comptés.', 'The word is revealed and the points are counted.')}</Guide>;
   else if (v.phase === 'choose' && drawer) guide = <Guide tone="you" title={t('À vous de dessiner : choisissez un mot', 'Your turn to draw: choose a word')}>{t(`Vous avez ${left} secondes, sinon le premier est pris.`, `You have ${left} seconds, or the first one is taken.`)}</Guide>;
   else if (v.phase === 'choose') guide = <Guide tone="wait" title={t(`${artist} choisit un mot à dessiner`, `${artist} is choosing a word to draw`)} />;
   else if (drawer) guide = <Guide tone="you" title={t(`Dessinez « ${v.word} »`, `Draw "${v.word}"`)}>{t('Ni lettres ni chiffres. Chaque joueur qui trouve vous rapporte des points.', 'No letters, no digits. Every player who finds it earns you points.')}</Guide>;
@@ -76,6 +77,7 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
 
   return (
     <div className="skrib">
+      <GameAnnouncement event={v.phase === 'choose' ? String(v.turn) : null} initial title={t(`Manche ${v.turn} sur ${v.turns}`, `Round ${v.turn} of ${v.turns}`)} detail={t(`${artist} choisit le prochain dessin.`, `${artist} chooses the next drawing.`)} sound="round" />
       {guide}
       <div className="sk-top">
         <strong className={`sk-word${v.phase === 'reveal' ? ' told' : ''}`} key={v.phase === 'reveal' ? 'told' : 'word'} lang="fr"><span className="sr">{t('Le mot à trouver', 'The word to find')} : </span>{v.phase === 'choose' ? '' : v.word || v.mask}</strong>
@@ -96,7 +98,22 @@ export default function SkribStage({ st, skew, act }: StageProps<View>) {
                 : <p lang="">{t(`${artist} choisit son mot…`, `${artist} is choosing a word…`)}</p>}
             </div>
           ) : (
-            <Pad strokes={v.strokes} act={drawer && v.phase === 'draw' ? act : undefined} k={`${v.turn}`} />
+            <Pad strokes={v.strokes} act={drawer && v.phase === 'draw' ? act : undefined} k={`${v.turn}`} allowFill />
+          )}
+          {v.phase === 'reveal' && (
+            <div className="sk-reveal" key={v.turn}>
+              <section className="panel light sk-reveal-card" role="status" aria-live="polite">
+                <h2>{t('Fin de manche', 'Round over')}</h2>
+                <p>{t('Le mot était', 'The word was')}</p>
+                <strong lang="fr">{v.word}</strong>
+                <p>{me >= 0
+                  ? t(`+${v.gained[me]} points gagnés`, `+${v.gained[me]} points earned`)
+                  : t('Les scores sont à jour.', 'The scores are up to date.')}</p>
+                <p className="sk-next" aria-live="off">{v.turn === v.turns
+                  ? t(`Classement final dans ${left} s`, `Final scores in ${left}s`)
+                  : t(`Prochain dessin dans ${left} s`, `Next drawing in ${left}s`)}</p>
+              </section>
+            </div>
           )}
         </div>
         <aside className="sk-side">
